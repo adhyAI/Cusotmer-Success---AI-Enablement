@@ -1,0 +1,21 @@
+# Personal research data — never commit transcripts, notes, or PII
+data/
+outputs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/settings.json
+*.swp
+*.swo
+
+# Env files
+.env
+.env.local
+.envrc
+
+# Node (if any tooling added later)
+node_modules/
