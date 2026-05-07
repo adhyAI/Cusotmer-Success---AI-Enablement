@@ -48,7 +48,7 @@
             themes:        mergeById(INIT_THEMES,        s.themes),
             insights:      mergeById(INIT_INSIGHTS,      s.insights),
             opportunities: mergeById(INIT_OPPORTUNITIES, s.opportunities),
-            results:       mergeById(INIT_RESULTS,       s.results),
+            results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
             tasks:         s.tasks || [],
             deletedIds:    del,
           };
@@ -107,8 +107,8 @@
 
     /* ─── defaults ─── */
     const INIT_SECTION_LABELS = {
-      stakeholders:"Stakeholders", highlights:"Highlights", insights:"Insights",
-      matrix:"Prioritization Matrix", status:"Tasks", results:"Results",
+      stakeholders:"Stakeholders", highlights:"Themes", insights:"Problem Statements",
+      matrix:"Opportunity Prioritization", status:"Tasks", results:"Results",
     };
 
     const DEFAULT_COL_CONFIG = [
@@ -142,6 +142,7 @@
       { id:"s15", name:"AI Team",                   role:"AI",                         poc:"Minakshi, Blessing",         team:"Product",          tier:3, segment:"Uninvolved", influence:"Low",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Emerging function. May inform future CS automation opportunities." },
       { id:"s16", name:"Colton",                    role:"Account Executive",           poc:"Colton",                     team:"Sales",            tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"New to the system but highly self-aware about pain. Loves storytelling, dislikes evangelizing. Proactively offered to co-build BDR call scripts. Strong signal for sales enablement and pre-call research automation." },
       { id:"s17", name:"Jitu",                       role:"Senior CSM",                 poc:"Jitu",                       team:"Customer Success", tier:1, segment:"Champion",   influence:"High", pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"Walked through full CSM lifecycle from handover to renewal. Core pain: no intelligence assist for usecase selection, no ready-made evangelism narrative. Hidden dep: his Statisfy health view depends on PM update discipline. Strong signal for Product Story Engine and Usecase Intelligence." },
+      { id:"s18", name:"Zach",                        role:"Account Executive",           poc:"Zach",                       team:"Sales",            tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"Late AI adopter now using it daily for outreach, research, and follow-up. Former BDR manager (5+ yrs, 25-person team) — deep understanding of prospect personas and org-size/security role dynamics. Key pain: finding the right DLP/DSPM-responsible contact at target companies (title ≠ responsibility), ZoomInfo not renewed (critical gap), Salesforce full of historical DRM leads that may now be ARMOR/DSPM opportunities. Uses ChatGPT for company research, LinkedIn for people. Second AE source confirming pre-call research and product knowledge gaps." },
     ];
 
 
@@ -203,6 +204,27 @@
           "Invite Colton to co-author the BDR qualification script",
           "Validate pre-meeting research brief concept with 2+ more AEs",
           "Explore AE knowledge base structure — regional, product, deal-type dimensions"
+        ]
+      },
+      {
+        id: "iv5", stakeholderId: "s18", source: "transcript", date: "2026-05-07",
+        sentiment: 1, urgency: 3,
+        summary: "Zachary Sullivan — Account Executive, Sales. Late AI adopter now using it daily: personalized outreach messaging (10 min → 1 min), pre-meeting company research via ChatGPT, post-meeting follow-up drafting. Two major new pain points: (1) Prospect Contact Identification — finding the person with actual DLP/DSPM responsibility (title ≠ role) at target companies. Manual LinkedIn + Google process, high time cost. 'Time to value' is the core challenge. (2) Salesforce Historical Lead Intelligence — closed/lost DRM-era accounts may now be ARMOR/DSPM opportunities. Wants AI to keyword-search Salesforce notes to surface re-engagement candidates. Also: ZoomInfo was not renewed — described as a 'have to have' for contact data and Salesforce auto-import. Confirmed pre-call research gap as second AE source (Colton was first). Prefers ChatGPT over Claude.",
+        quotes: [
+          "What might have taken me 5–10 minutes before, now takes me one minute — all I'm really doing is adding a small level of personalization so it doesn't seem like it's actually an AI.",
+          "I've moved from looking at LinkedIn for company research to asking AI — I've pretty much trained it so it knows what information I want to see.",
+          "Most of the time is spent trying to find the person who has a cybersecurity title, but their responsibility is actually data protection. It's a big difference between the title and the responsibilities.",
+          "The closer I can get to the people I want to talk to, the better. It's all about time to value.",
+          "Is there a chance to go back and use AI in our Salesforce to run a search of keywords — look at the notes and determine which ones are most likely to buy?",
+          "ZoomInfo — that's not a want to have, that's a have to have. There's an automatic way to click a button and pull the lead directly into Salesforce."
+        ],
+        themes: ["Pre-Call Research Gap", "Prospect Contact Identification", "Salesforce Historical Lead Intelligence", "Product Story & Narrative Gap", "Multi-platform Fragmentation"],
+        frictionAreas: ["Contact Identification", "Salesforce Historical Leads", "Pre-call Research", "ZoomInfo Gap"],
+        actionItems: [
+          "Validate Salesforce historical lead re-scoring concept with Sales leadership",
+          "Map prospect contact identification workflow — what data sources could power it?",
+          "Confirm ZoomInfo replacement tool name with Zach once he has access",
+          "Raise op6 (AE Pre-Meeting Research Brief) confidence — now 2 AE sources"
         ]
       },
       {
@@ -273,17 +295,18 @@
       },
       {
         id: "t6", label: "Pre-Call Research Gap",
-        summary: "AEs have no automated support for pre-meeting research. Competitor landscape (DSPM: Cyera, Securiti), company background, key contacts, and market trends are researched manually — often not at all for time-constrained AEs.",
-        frequency: 1, status: "Emerging", stakeholderIds: ["s16"],
+        summary: "AEs have no automated support for pre-meeting research. Competitor landscape (DSPM: Cyera, Securiti), company background, key contacts, and market trends are researched manually. Confirmed by two AEs: Colton (manual competitor research) and Zach (now uses ChatGPT for company research but LinkedIn for people — still two separate manual flows).",
+        frequency: 2, status: "Confirmed", stakeholderIds: ["s16","s18"],
         quotes: [
           "I had to research Cyera, Securiti, and others myself — there's no internal resource for that.",
-          "Before a meeting I want to know the company, the people I'm going to meet, the trends — complete research."
+          "Before a meeting I want to know the company, the people I'm going to meet, the trends — complete research.",
+          "I've moved from looking at LinkedIn for company research to asking AI — I've pretty much trained it so it knows what information I want to see."
         ]
       },
       {
         id: "t7", label: "Product Story & Narrative Gap",
-        summary: "Both AEs (pre-sale) and CSMs (post-sale) lack a ready-made, intelligent narrative about what Seclore can do. AEs build competitive stories from scratch; CSMs have no 'story to evangelize' with customers. Same root gap, two different contexts.",
-        frequency: 2, status: "Confirmed", stakeholderIds: ["s16","s17"],
+        summary: "AEs (pre-sale) and CSMs (post-sale) lack a ready-made, intelligent narrative about what Seclore can do. AEs build competitive stories from scratch; CSMs have no 'story to evangelize' with customers. Zach adds: ARMOR/DSPM talk tracks being trained but not yet complete.",
+        frequency: 3, status: "Confirmed", stakeholderIds: ["s16","s17","s18"],
         quotes: [
           "There should be a knowledge base for AEs — what's working in their region, so others can benefit.",
           "The primary thing they would need help with is to give them a story to evangelize with the customer — anything that helps."
@@ -304,6 +327,25 @@
         frequency: 1, status: "Emerging", stakeholderIds: ["s17"],
         quotes: [
           "I need support in the usecase mapping piece — picking the right usecases for the customer and organization, evangelizing them, and delivering on them."
+        ]
+      },
+      {
+        id: "t10", label: "Prospect Contact Identification Gap",
+        summary: "AEs spend significant time finding the right person at target companies — the one with actual DLP/DSPM responsibility, not just a matching title. In 1000+ employee companies, the cybersecurity team has 10–15 people; most have no interest. Currently done via manual LinkedIn + Google search per account.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s18"],
+        quotes: [
+          "Most of the time is spent trying to find the person who has a cybersecurity title, but their responsibility is actually data protection. It's a big difference between the title and the responsibilities.",
+          "The closer I can get to the people I want to talk to, the better. It's all about time to value.",
+          "You've got probably well more than 10 people in the cybersecurity team — and you're going to have eight people who have no interest."
+        ]
+      },
+      {
+        id: "t11", label: "Salesforce Historical Lead Intelligence",
+        summary: "Seclore's Salesforce contains closed/lost accounts from the DRM era that were never viable DRM deals but may now be strong ARMOR/DSPM prospects. No mechanism exists to resurface these using keyword search or AI scoring. Re-engaging old pipeline is a manual needle-in-a-haystack problem.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s18"],
+        quotes: [
+          "Is there a chance to go back and use AI in our Salesforce to run a search of keywords — look at the notes and determine which ones are most likely to buy?",
+          "If it wasn't a DRM opportunity at the time, we would not have continued to work that lead. But now with ARMOR and DSPM — there's a chance to go back."
         ]
       }
     ];
@@ -369,7 +411,7 @@
         ]
       },
       {
-        id:"ps6", themeId:"t6", impact:"High", status:"Draft", stakeholderIds:["s16"],
+        id:"ps6", themeId:"t6", impact:"High", status:"Validated", stakeholderIds:["s16","s18"],
         hmw:"How might we give AEs a complete, ready-to-use pre-meeting brief on the prospect, their contacts, and the competitive landscape — before the meeting starts?",
         jtbd:"When I have a meeting booked with a prospect, I want an automated brief covering their company, key people, recent news, and relevant competitors like Cyera and Securiti, so I can spend my prep time crafting the story instead of doing research.",
         fiveWhys:[
@@ -414,6 +456,30 @@
           "Usecase selection relies entirely on individual CSM experience and tribal knowledge",
           "Successful usecase delivery patterns from other accounts are never systematically captured or reused",
           "Seclore's product catalog and implementation playbooks are not connected to customer profile data"
+        ]
+      },
+      {
+        id:"ps10", themeId:"t10", impact:"High", status:"Draft", stakeholderIds:["s18"],
+        hmw:"How might we help AEs identify the right DLP/DSPM-responsible contact at target companies — based on actual responsibility rather than job title — so they reach the decision-maker without spending 30+ minutes per account on manual LinkedIn search?",
+        jtbd:"When I'm working a prospect account, I want to quickly find the specific person who owns DLP or DSPM — not just anyone with a security title — so I can reach the right person on the first outreach and improve my time to first meaningful conversation.",
+        fiveWhys:[
+          "AEs spend significant time per account manually searching LinkedIn and Google for the right security contact",
+          "Job titles don't reliably indicate DLP/DSPM responsibility — especially in mid-market and enterprise accounts",
+          "No internal tool maps org-size and company type to the likely security decision-maker profile",
+          "Seclore's buyer persona intelligence exists in individual AE heads, not in any shared system",
+          "Sales tooling (Salesforce, ZoomInfo) captures contact data but does not score or prioritize contacts by Seclore fit"
+        ]
+      },
+      {
+        id:"ps11", themeId:"t11", impact:"High", status:"Draft", stakeholderIds:["s18"],
+        hmw:"How might we surface high-potential re-engagement opportunities buried in Seclore's Salesforce history — accounts closed or lost during the DRM era that are now strong ARMOR/DSPM candidates?",
+        jtbd:"When I'm building my pipeline, I want AI to scan our existing Salesforce accounts and notes for DSPM and DLP signals — so I can identify warm re-engagement targets without manually reviewing hundreds of old records.",
+        fiveWhys:[
+          "Salesforce contains hundreds of closed/lost accounts worked when Seclore only had DRM — now irrelevant to DRM but potentially relevant to ARMOR/DSPM",
+          "No mechanism exists to search Salesforce notes and opportunity records by keyword or signal",
+          "Account status (closed/lost) removes these from active AE pipelines even when product-market fit has changed",
+          "ARMOR and DSPM are new enough that no re-engagement workflow has been designed",
+          "Sales team is focused on new outbound prospecting — historical lead mining is not a defined motion"
         ]
       }
     ];
@@ -477,8 +543,8 @@
       {
         id:"op6", title:"AE Pre-Meeting Research Brief",
         description:"Auto-generate a pre-call research brief before each customer meeting: company snapshot, key contacts, recent news, DSPM competitor context, and suggested talking points — synthesized from ZoomInfo, Salesforce, and news signals into a single doc delivered before the meeting.",
-        themeIds:["t6","t4","t1"], stakeholderIds:["s16"],
-        reach:7, impact:7, confidence:6, effort:5,
+        themeIds:["t6","t4","t1"], stakeholderIds:["s16","s18"],
+        reach:7, impact:7, confidence:7, effort:5,
         effortLabel:"M", horizon:"Next", status:"Candidate",
         tags:["Sales","Pre-Call","Research","Automation"],
         successMetrics:["Pre-meeting research time: 30–60 min manual → <5 min review","AE meeting prep completion rate: from ad hoc → consistent for all booked meetings"],
@@ -488,7 +554,7 @@
       {
         id:"op7", title:"Seclore Product Story Engine",
         description:"A living, role-aware intelligence layer that gives AEs a tested competitive narrative before a deal and gives CSMs an evangelism story before a customer meeting — drawing from product capabilities, winning deal patterns, and successful usecase deliveries. One source, two contexts: pre-sale and post-sale.",
-        themeIds:["t7","t1"], stakeholderIds:["s16","s17"],
+        themeIds:["t7","t1"], stakeholderIds:["s16","s17","s18"],
         reach:8, impact:8, confidence:6, effort:6,
         effortLabel:"M", horizon:"Next", status:"Candidate",
         tags:["Sales","CSM","Knowledge","Evangelism","Product Coach"],
@@ -506,73 +572,34 @@
         successMetrics:["Usecase selection time per account: manual/ad hoc → structured in <15 min","CSM-reported confidence in usecase roadmap: measured at QBR prep","Adoption rate of recommended usecases vs. CSM-chosen: track over 2 quarters"],
         antiUseCases:["Strategic enterprise accounts with highly custom implementation paths","Accounts in regulated industries where usecase selection requires compliance review"],
         notes:"Jitu: 'I need support in the usecase mapping piece — picking the right usecases for the customer and organization.' Single-source validation — confidence capped at 5. Strong conceptual fit with Product Story Engine (op7); likely built together or sequenced."
+      },
+      {
+        id:"op9", title:"Salesforce Historical Lead Re-Scorer",
+        description:"Scan Seclore's existing Salesforce accounts, notes, and closed/lost opportunities for DSPM and DLP keyword signals — automatically surface and score accounts that were cold DRM leads but are now warm ARMOR/DSPM re-engagement candidates.",
+        themeIds:["t11","t1"], stakeholderIds:["s18"],
+        reach:7, impact:8, confidence:5, effort:5,
+        horizon:"Next", status:"Candidate",
+        tags:["Salesforce","Sales","ARMOR","DSPM","Pipeline"],
+        successMetrics:["Re-engagement opportunities surfaced from historical Salesforce data per quarter","AE time to identify warm DSPM leads: manual → <5 min review","Pipeline sourced from historical lead re-scoring vs. new outbound"],
+        antiUseCases:["Accounts in active pipeline — no re-scoring needed","Accounts with GDPR/data restrictions on historical note access"],
+        notes:"Zach: 'Is there a chance to go back and use AI in our Salesforce to run a search of keywords and look at the notes to determine which are most likely to buy?' Single-source validation — needs Sales leadership and ops input. Confidence capped at 5."
+      },
+      {
+        id:"op10", title:"Prospect Contact Intelligence",
+        description:"Given a target company, automatically identify the person with actual DLP/DSPM responsibility — not just a matching title — by mapping org size, industry, and role patterns to the Seclore buyer persona. Deliver a ranked shortlist of the right contacts to reach, with their LinkedIn profiles and suggested outreach angle.",
+        themeIds:["t10","t6"], stakeholderIds:["s18"],
+        reach:7, impact:7, confidence:5, effort:6,
+        horizon:"Later", status:"Candidate",
+        tags:["Sales","Prospecting","DLP","DSPM","Contact Intelligence"],
+        successMetrics:["Time to identify right DLP/DSPM contact per account: 30+ min → <5 min","First-outreach-to-response rate on AI-identified contacts vs. manual","% of pipeline sourced from AI-identified contacts over 2 quarters"],
+        antiUseCases:["Existing accounts with known contacts already in Salesforce","SMB accounts where one IT person owns everything"],
+        notes:"Zach: 'Most of the time is spent finding the person with cybersecurity title but whose responsibility is actually data protection — it's a big difference.' Single-source. Needs ZoomInfo replacement tool context and 2+ AE validation before committing. Confidence capped at 5."
       }
     ];
 
-    const INIT_RESULTS = [
-      {
-        id:"res1", type:"decision",
-        title:"Prioritize ProTrack Auto-Fill as first AI automation",
-        rationale:"Highest RICE score (107), lowest effort (S), clear champion (Kevin), data model already exists. Quick win that builds internal confidence in AI automation.",
-        date:"2026-05-05", owner:"Tarun", status:"Open",
-        horizon:null, baseline:null, target:null, actual:null
-      },
-      {
-        id:"res2", type:"decision",
-        title:"Pilot renewal proposal automation with AMEA CSM team (Gautam)",
-        rationale:"Gautam is an identified champion with direct access to Vishal for budget. 300+ proposals/year in his team provides high-volume validation signal.",
-        date:"2026-05-05", owner:"Tarun", status:"Open",
-        horizon:null, baseline:null, target:null, actual:null
-      },
-      {
-        id:"res3", type:"roadmap",
-        title:"ProTrack Version Auto-Fill",
-        rationale:"Highest RICE, S effort, validated pain from Kevin. Addresses the most hated manual workflow in Delivery.",
-        date:"2026-05-05", owner:"", status:"Open",
-        horizon:"Now", baseline:null, target:null, actual:null
-      },
-      {
-        id:"res4", type:"roadmap",
-        title:"Renewal Proposal Automation",
-        rationale:"300+ proposals/year, champion ready, template-friendly. Second highest RICE. Pilot with AMEA team.",
-        date:"2026-05-05", owner:"", status:"Open",
-        horizon:"Next", baseline:null, target:null, actual:null
-      },
-      {
-        id:"res5", type:"roadmap",
-        title:"FreshDesk AI First Responder",
-        rationale:"Customer-visible pain (bad generic responses), clear KB integration path. Needs SLA baseline from Nirupama Jaiswal.",
-        date:"2026-05-05", owner:"", status:"Open",
-        horizon:"Next", baseline:null, target:null, actual:null
-      },
-      {
-        id:"res6", type:"roadmap",
-        title:"Self-Service Health Check Portal",
-        rationale:"High impact but large effort and design complexity. Right for Later after quick wins build organizational momentum.",
-        date:"2026-05-05", owner:"", status:"Open",
-        horizon:"Later", baseline:null, target:null, actual:null
-      },
-      {
-        id:"res7", type:"outcome",
-        title:"ProTrack upgrade cycle time",
-        rationale:"Primary efficiency metric for the ProTrack auto-fill initiative.",
-        date:"2026-05-05", owner:"Kevin Dias", status:"Open",
-        horizon:null,
-        baseline:"~20 min per upgrade cycle (10+ manual field updates)",
-        target:"<2 min per upgrade cycle (automated propagation)",
-        actual:""
-      },
-      {
-        id:"res8", type:"outcome",
-        title:"Renewal proposal creation time",
-        rationale:"Primary efficiency metric for the renewal automation initiative.",
-        date:"2026-05-05", owner:"Gautam Singh Deo", status:"Open",
-        horizon:null,
-        baseline:"10–30 min per proposal (with iterations), 300+ per year",
-        target:"<5 min review-and-send, same volume",
-        actual:""
-      }
-    ];
+    const PURGED_RESULT_IDS = new Set(["res1","res2","res3","res4","res5","res6","res7","res8"]);
+
+    const INIT_RESULTS = [];
 
     const INIT_TASKS = [];
 
@@ -584,6 +611,40 @@
 
     function Badge({ label, colorClass }) {
       return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>{label}</span>;
+    }
+
+    const TOOLTIPS = {
+      "Now":              "This quarter — highest execution priority",
+      "Next":             "Next quarter — in the pipeline, not yet committed",
+      "Later":            "Backlog — valuable but not in near-term focus",
+      "Candidate":        "Identified but not yet evaluated or committed",
+      "Under Evaluation": "Being assessed for feasibility and priority",
+      "Approved":         "Committed to build — on the roadmap",
+      "In Progress":      "Currently being built or rolled out",
+      "Delivered":        "Shipped — measure outcomes",
+      "Rejected":         "Assessed and deprioritized",
+      "S":  "Small effort (1–2) — quick win, minimal build",
+      "M":  "Medium effort (3–4) — weeks of work, moderate complexity",
+      "L":  "Large effort (5–7) — significant build, multiple stakeholders",
+      "XL": "Extra large effort (8–10) — major initiative, high coordination",
+    };
+
+    function InfoTip({ term }) {
+      const text = TOOLTIPS[term];
+      if (!text) return null;
+      return (
+        <span className="relative group inline-flex items-center ml-0.5">
+          <span className="cursor-help text-slate-300 hover:text-[#3D35C0] text-[10px] italic font-serif border border-slate-300 hover:border-[#3D35C0] rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none transition-colors">i</span>
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-slate-800 text-white text-xs rounded-lg px-2.5 py-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 leading-snug whitespace-normal text-center shadow-lg">{text}</span>
+        </span>
+      );
+    }
+
+    function effortToLabel(n) {
+      if (n <= 3) return "S";
+      if (n <= 5) return "M";
+      if (n <= 7) return "L";
+      return "XL";
     }
 
     function EmptyState({ msg }) {
@@ -1252,11 +1313,6 @@
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
                           <h3 className="font-semibold text-slate-800 text-sm">{op.title}</h3>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <Badge label={op.horizon} colorClass={HORIZON_COLORS[op.horizon]||"bg-slate-100 text-slate-500"} />
-                            <Badge label={"Effort "+op.effortLabel} colorClass={EFFORT_COLORS[op.effortLabel]||"bg-slate-100 text-slate-500"} />
-                            <Badge label={op.status} colorClass={STATUS_COLORS[op.status]||"bg-slate-100 text-slate-500"} />
-                          </div>
                         </div>
                         <p className="text-xs text-slate-500 leading-relaxed mb-2">{op.description}</p>
                         <div className="flex items-center gap-4 text-xs text-slate-400">
@@ -1360,17 +1416,19 @@
     }
 
     /* ── Results section ── */
-    function SectionResults({ results, tasks }) {
+    function SectionResults({ results, tasks, opportunities }) {
       const [view, setView] = useState("roadmap");
 
       const decisions = results.filter(r => r.type==="decision");
-      const roadmap   = results.filter(r => r.type==="roadmap");
       const outcomes  = results.filter(r => r.type==="outcome");
 
-      const nowItems   = roadmap.filter(r => r.horizon==="Now");
-      const nextItems  = roadmap.filter(r => r.horizon==="Next");
-      const laterItems = roadmap.filter(r => r.horizon==="Later");
+      function rice(op) { return Math.round((op.reach * op.impact * op.confidence) / op.effort); }
+      const sortedOps = [...(opportunities||[])].sort((a,b) => rice(b)-rice(a));
+      const nowOps    = sortedOps.filter(op => op.horizon==="Now");
+      const nextOps   = sortedOps.filter(op => op.horizon==="Next");
+      const laterOps  = sortedOps.filter(op => op.horizon==="Later");
 
+      const STATUS_DOT = { "Candidate":"bg-slate-300","Under Evaluation":"bg-amber-400","Approved":"bg-green-500","In Progress":"bg-blue-500","Delivered":"bg-indigo-500","Rejected":"bg-red-400" };
       const DEC_STATUS = { "Open":"bg-amber-100 text-amber-700","In Progress":"bg-blue-100 text-blue-700","Done":"bg-green-100 text-green-700" };
 
       return (
@@ -1390,26 +1448,34 @@
           {view==="roadmap" && (
             <div className="grid grid-cols-3 gap-4">
               {[
-                ["Now",   nowItems,   "border-green-200","bg-green-50","text-green-700","bg-green-500"],
-                ["Next",  nextItems,  "border-blue-200", "bg-blue-50", "text-blue-700", "bg-blue-400"],
-                ["Later", laterItems, "border-slate-200","bg-slate-50","text-slate-600","bg-slate-300"],
-              ].map(([label,items,border,bg,text,dot]) => (
+                ["Now",   nowOps,   "border-green-200","bg-green-50","text-green-700"],
+                ["Next",  nextOps,  "border-blue-200", "bg-blue-50", "text-blue-700"],
+                ["Later", laterOps, "border-slate-200","bg-slate-50","text-slate-600"],
+              ].map(([label,ops,border,bg,text]) => (
                 <div key={label}>
                   <div className={"rounded-xl border p-4 "+border+" "+bg}>
                     <h3 className={"text-sm font-bold mb-3 "+text}>{label}</h3>
                     <div className="space-y-2">
-                      {items.map(item => (
-                          <div key={item.id} className="bg-white border border-slate-200 rounded-lg p-3">
-                            <div className="flex items-start gap-2">
-                              <div className={"w-2 h-2 rounded-full mt-1.5 flex-shrink-0 "+dot} />
-                              <div>
-                                <p className="text-xs font-semibold text-slate-800">{item.title}</p>
-                                {item.rationale && <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{item.rationale}</p>}
+                      {ops.map((op,idx) => (
+                        <div key={op.id} className="bg-white border border-slate-200 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs font-bold text-slate-300 flex-shrink-0 mt-0.5 w-4">#{idx+1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-1">
+                                <p className="text-xs font-semibold text-slate-800 leading-snug">{op.title}</p>
+                                <span className="text-xs font-bold text-[#3D35C0] flex-shrink-0">{rice(op)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <div className={"w-1.5 h-1.5 rounded-full flex-shrink-0 "+(STATUS_DOT[op.status]||"bg-slate-300")} />
+                                <span className="text-xs text-slate-400">{op.status}</span>
+                                <span className="text-xs text-slate-300">·</span>
+                                <span className="text-xs text-slate-400">Effort {effortToLabel(op.effort)}</span>
                               </div>
                             </div>
                           </div>
-                        ))
-                      }
+                        </div>
+                      ))}
+                      {ops.length === 0 && <p className="text-xs text-slate-300 italic">No opportunities</p>}
                     </div>
                   </div>
                 </div>
@@ -1558,7 +1624,7 @@
                     </td>
                     <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,color:"#3D35C0",fontSize:"0.85rem"}}>{score}</td>
                     <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={op.horizon} colorClass={HORIZON_COLORS[op.horizon]||"bg-slate-100 text-slate-500"} /></td>
-                    <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={op.effortLabel} colorClass={EFFORT_COLORS[op.effortLabel]||"bg-slate-100 text-slate-500"} /></td>
+                    <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={effortToLabel(op.effort)} colorClass={EFFORT_COLORS[effortToLabel(op.effort)]||"bg-slate-100 text-slate-500"} /></td>
                     <td style={{padding:"5px 8px"}}>
                       <div className="flex items-center gap-1">
                         <Badge label={op.status} colorClass={STATUS_COLORS[op.status]||"bg-slate-100 text-slate-500"} />
@@ -1652,7 +1718,7 @@
             themes:        mergeById(INIT_THEMES,        s.themes),
             insights:      mergeById(INIT_INSIGHTS,      s.insights),
             opportunities: mergeById(INIT_OPPORTUNITIES, s.opportunities),
-            results:       mergeById(INIT_RESULTS,       s.results),
+            results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
             tasks:         s.tasks || [],
             deletedIds:    del,
           };
@@ -1714,7 +1780,15 @@
         matrix:       <SectionMatrix opportunities={opportunities} stakeholders={stakeholders} themes={themes}
                         updOpp={updOpp} tasks={tasks} addTask={addTask} removeTask={removeTask} />,
         status:       <SectionTasks tasks={tasks} updTask={updTask} updOpp={updOpp} opportunities={opportunities} removeTask={removeTask} />,
-        results:      <SectionResults results={results} tasks={tasks} />,
+        results:      (
+          <div className="flex flex-col items-center justify-center py-32 text-center">
+            <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center mb-4">
+              <span className="text-slate-300 text-lg">&#9685;</span>
+            </div>
+            <p className="text-slate-500 font-medium text-sm">Results loading</p>
+            <p className="text-slate-400 text-xs mt-1 max-w-xs">This section will track metrics, outcomes, and impact once initiatives are underway.</p>
+          </div>
+        ),
       };
 
       return (
