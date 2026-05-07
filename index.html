@@ -36,6 +36,17 @@
       (savedArr || []).forEach(x => { map[x.id] = map[x.id] ? {...map[x.id], ...x} : x; });
       return Object.values(map);
     }
+    function fillInitFields(merged, initArr, fields) {
+      const initMap = {};
+      (initArr||[]).forEach(x => { initMap[x.id] = x; });
+      return merged.map(item => {
+        const init = initMap[item.id];
+        if (!init) return item;
+        const patch = {};
+        fields.forEach(f => { if ((item[f]===undefined||item[f]==="") && init[f]) patch[f]=init[f]; });
+        return Object.keys(patch).length ? {...item,...patch} : item;
+      });
+    }
     function loadState() {
       try {
         const r = localStorage.getItem(STORAGE_KEY);
@@ -47,7 +58,7 @@
             interviews:    mergeById(INIT_INTERVIEWS,    s.interviews),
             themes:        mergeById(INIT_THEMES,        s.themes),
             insights:      mergeById(INIT_INSIGHTS,      s.insights),
-            opportunities: mergeById(INIT_OPPORTUNITIES, s.opportunities),
+            opportunities: fillInitFields(mergeById(INIT_OPPORTUNITIES, s.opportunities), INIT_OPPORTUNITIES, ["statisfyAgent"]),
             results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
             tasks:         s.tasks || [],
             deletedIds:    del,
@@ -1736,7 +1747,7 @@
             interviews:    mergeById(INIT_INTERVIEWS,    s.interviews),
             themes:        mergeById(INIT_THEMES,        s.themes),
             insights:      mergeById(INIT_INSIGHTS,      s.insights),
-            opportunities: mergeById(INIT_OPPORTUNITIES, s.opportunities),
+            opportunities: fillInitFields(mergeById(INIT_OPPORTUNITIES, s.opportunities), INIT_OPPORTUNITIES, ["statisfyAgent"]),
             results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
             tasks:         s.tasks || [],
             deletedIds:    del,
