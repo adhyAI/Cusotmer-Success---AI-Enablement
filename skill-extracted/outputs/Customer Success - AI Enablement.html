@@ -491,6 +491,7 @@
         themeIds:["t2"], stakeholderIds:["s7"],
         reach:5, impact:8, confidence:8, effort:3,
         effortLabel:"S", horizon:"Now", status:"Approved",
+        statisfyAgent:"",
         tags:["ProTrack","Delivery","Automation"],
         successMetrics:["Version upgrade field updates: 10+ manual → 0 manual","Time per upgrade cycle: ~20 min → <2 min"],
         antiUseCases:["Custom non-standard upgrades with exception dependencies","Multi-product upgrades with conflicting version constraints"],
@@ -502,6 +503,7 @@
         themeIds:["t2","t1"], stakeholderIds:["s2"],
         reach:8, impact:8, confidence:6, effort:5,
         effortLabel:"M", horizon:"Next", status:"Under Evaluation",
+        statisfyAgent:"",
         tags:["Renewal","Salesforce","CSM"],
         successMetrics:["Proposal creation time: 10–30 min → <5 min review","300+ proposals/year handled without incremental CSM time"],
         antiUseCases:["Strategic enterprise renewals requiring bespoke pricing narrative","First renewal for complex accounts with non-standard terms"],
@@ -513,6 +515,7 @@
         themeIds:["t3","t1"], stakeholderIds:["s7"],
         reach:7, impact:8, confidence:6, effort:5,
         effortLabel:"M", horizon:"Next", status:"Candidate",
+        statisfyAgent:"",
         tags:["FreshDesk","Support","Triage"],
         successMetrics:["First response time during critical incidents: missed SLA → within SLA","Generic automated responses: eliminated","Ticket misclassification rate: reduced 50%+"],
         antiUseCases:["Complex multi-system critical incidents requiring engineer judgment","New product areas with no KB coverage yet"],
@@ -524,6 +527,7 @@
         themeIds:["t4"], stakeholderIds:["s2"],
         reach:8, impact:7, confidence:4, effort:6,
         effortLabel:"L", horizon:"Later", status:"Candidate",
+        statisfyAgent:"",
         tags:["Intelligence","CSM","Proactive"],
         successMetrics:["CSMs aware of material customer events before next QBR","Renewal reframed proactively in ≥80% of flagged cases"],
         antiUseCases:["Accounts in regulated industries where external monitoring raises compliance issues","SMB accounts with low signal density"],
@@ -535,6 +539,7 @@
         themeIds:["t5","t2"], stakeholderIds:["s2"],
         reach:6, impact:9, confidence:5, effort:7,
         effortLabel:"L", horizon:"Later", status:"Candidate",
+        statisfyAgent:"",
         tags:["Health Check","Self-Service","Scale"],
         successMetrics:["Health check delivery time: 4 days → <1 hour for low-touch accounts","Low-touch capacity: scales with account volume, not headcount"],
         antiUseCases:["High-touch strategic accounts where relationship delivery is the value","Initial health checks for complex new deployments"],
@@ -546,6 +551,7 @@
         themeIds:["t6","t4","t1"], stakeholderIds:["s16","s18"],
         reach:7, impact:7, confidence:7, effort:5,
         effortLabel:"M", horizon:"Next", status:"Candidate",
+        statisfyAgent:"",
         tags:["Sales","Pre-Call","Research","Automation"],
         successMetrics:["Pre-meeting research time: 30–60 min manual → <5 min review","AE meeting prep completion rate: from ad hoc → consistent for all booked meetings"],
         antiUseCases:["Strategic renewal calls where deep relationship history matters more than market research","Internal sync calls with no external company context needed"],
@@ -557,6 +563,7 @@
         themeIds:["t7","t1"], stakeholderIds:["s16","s17","s18"],
         reach:8, impact:8, confidence:6, effort:6,
         effortLabel:"M", horizon:"Next", status:"Candidate",
+        statisfyAgent:"",
         tags:["Sales","CSM","Knowledge","Evangelism","Product Coach"],
         successMetrics:["AE time building competitive narrative: ad hoc → <10 min review","CSM time preparing evangelism story: 30+ min → guided framework in <5 min","AE + CSM-reported confidence in product positioning: quarterly survey baseline"],
         antiUseCases:["Highly bespoke enterprise deals requiring custom narrative construction","Early-stage accounts where no pattern exists yet to draw from"],
@@ -568,6 +575,7 @@
         themeIds:["t9","t7"], stakeholderIds:["s17"],
         reach:6, impact:8, confidence:5, effort:5,
         effortLabel:"M", horizon:"Next", status:"Candidate",
+        statisfyAgent:"",
         tags:["CSM","Usecase","Adoption","Intelligence"],
         successMetrics:["Usecase selection time per account: manual/ad hoc → structured in <15 min","CSM-reported confidence in usecase roadmap: measured at QBR prep","Adoption rate of recommended usecases vs. CSM-chosen: track over 2 quarters"],
         antiUseCases:["Strategic enterprise accounts with highly custom implementation paths","Accounts in regulated industries where usecase selection requires compliance review"],
@@ -579,6 +587,7 @@
         themeIds:["t11","t1"], stakeholderIds:["s18"],
         reach:7, impact:8, confidence:5, effort:5,
         horizon:"Next", status:"Candidate",
+        statisfyAgent:"",
         tags:["Salesforce","Sales","ARMOR","DSPM","Pipeline"],
         successMetrics:["Re-engagement opportunities surfaced from historical Salesforce data per quarter","AE time to identify warm DSPM leads: manual → <5 min review","Pipeline sourced from historical lead re-scoring vs. new outbound"],
         antiUseCases:["Accounts in active pipeline — no re-scoring needed","Accounts with GDPR/data restrictions on historical note access"],
@@ -590,6 +599,7 @@
         themeIds:["t10","t6"], stakeholderIds:["s18"],
         reach:7, impact:7, confidence:5, effort:6,
         horizon:"Later", status:"Candidate",
+        statisfyAgent:"",
         tags:["Sales","Prospecting","DLP","DSPM","Contact Intelligence"],
         successMetrics:["Time to identify right DLP/DSPM contact per account: 30+ min → <5 min","First-outreach-to-response rate on AI-identified contacts vs. manual","% of pipeline sourced from AI-identified contacts over 2 quarters"],
         antiUseCases:["Existing accounts with known contacts already in Salesforce","SMB accounts where one IT person owns everything"],
@@ -1321,11 +1331,12 @@
                           <span>Confidence <span className="font-semibold text-slate-600">{op.confidence}</span></span>
                           <span>Effort <span className="font-semibold text-slate-600">{op.effort}</span></span>
                         </div>
-                        {relThemes.length>0 && (
-                          <div className="flex gap-1 mt-2">
-                            {relThemes.map(t => <span key={t.id} className="text-xs bg-purple-50 text-[#3D35C0] px-1.5 py-0.5 rounded">{t.label}</span>)}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          {relThemes.length>0 && relThemes.map(t => <span key={t.id} className="text-xs bg-purple-50 text-[#3D35C0] px-1.5 py-0.5 rounded">{t.label}</span>)}
+                          {op.statisfyAgent && (
+                            <span className="text-xs bg-violet-50 text-violet-600 border border-violet-200 px-2 py-0.5 rounded-full font-medium">⚡ {op.statisfyAgent}</span>
+                          )}
+                        </div>
                       </div>
                       <span className="text-xs text-slate-300 flex-shrink-0 mt-1">{isOpen?"▲":"▼"}</span>
                     </div>
@@ -1342,6 +1353,14 @@
                             onChange={e => { e.stopPropagation(); updOpp(op.id, "description", e.target.value); }}
                             rows={2}
                             className="w-full text-xs text-slate-600 border border-slate-200 rounded-lg px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs text-slate-400 whitespace-nowrap">⚡ Statisfy Agent</span>
+                            <input type="text" value={op.statisfyAgent||""}
+                              placeholder="e.g. Renewal Agent, Outreach Agent…"
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => { e.stopPropagation(); updOpp(op.id, "statisfyAgent", e.target.value); }}
+                              className="flex-1 text-xs text-violet-700 border border-violet-200 rounded-lg px-3 py-1.5 bg-violet-50 placeholder-violet-300 focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                          </div>
                         </div>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                           {op.successMetrics?.length>0 && (
