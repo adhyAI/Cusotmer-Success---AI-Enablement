@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Success - AI Enablement</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .print-only { display: none; }
+    @page { margin: 0; size: A4 landscape; }
+    @media print {
+      .no-print   { display: none !important; }
+      .print-only { display: block !important; padding: 0.9cm 1.1cm; }
+      body, .bg-slate-50 { background: white !important; }
+      .max-w-7xl  { max-width: 100% !important; }
+      .shadow-sm, .shadow-md { box-shadow: none !important; }
+      .border.rounded-xl, .border.rounded-lg { break-inside: avoid; }
+      .print-section { break-before: page; }
+      .print-section:first-child { break-before: auto; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    /* ─── persistence ─── */
+    const STORAGE_KEY = "cs-research-v1";
+    function mergeById(initArr, savedArr) {
+      const map = {};
+      (initArr  || []).forEach(x => { map[x.id] = x; });
+      (savedArr || []).forEach(x => { map[x.id] = map[x.id] ? {...map[x.id], ...x} : x; });
+      return Object.values(map);
+    }
+    function loadState() {
+      try {
+        const r = localStorage.getItem(STORAGE_KEY);
+        if (r) {
+          const s = JSON.parse(r);
+          const del = s.deletedIds || [];
+          return { ...s,
+            stakeholders:  mergeById(INIT_STAKEHOLDERS,  s.stakeholders).filter(x => !del.includes(x.id)),
+            interviews:    mergeById(INIT_INTERVIEWS,    s.interviews),
+            themes:        mergeById(INIT_THEMES,        s.themes),
+            insights:      mergeById(INIT_INSIGHTS,      s.insights),
+            opportunities: mergeById(INIT_OPPORTUNITIES, s.opportunities),
+            results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
+            tasks:         s.tasks || [],
+            deletedIds:    del,
+          };
+        }
+      } catch(e) {}
+      return null;
+    }
+    function saveState(s) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch(e) {}
+      saveIDB(s);
+    }
+
+    /* ─── IndexedDB persistence (survives browser restart on file://) ─── */
+    const IDB_NAME = "cs-research-idb", IDB_STORE = "data", IDB_KEY = "v1";
+    function openIDB() {
+      return new Promise((res, rej) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+        req.onsuccess = e => res(e.target.result);
+        req.onerror = rej;
+      });
+    }
+    function saveIDB(s) {
+      openIDB().then(db => {
+        db.transaction(IDB_STORE,"readwrite").objectStore(IDB_STORE)
+          .put(JSON.parse(JSON.stringify(s)), IDB_KEY);
+      }).catch(()=>{});
+    }
+    function loadIDB() {
+      return openIDB().then(db => new Promise(res => {
+        const req = db.transaction(IDB_STORE,"readonly").objectStore(IDB_STORE).get(IDB_KEY);
+        req.onsuccess = e => res(e.target.result || null);
+        req.onerror   = () => res(null);
+      })).catch(() => null);
+    }
+
+    /* ─── color maps ─── */
+    const TIER_LABELS  = { 1:"Decision Maker", 2:"Power User", 3:"Adjacent", 4:"Skeptic" };
+    const TIER_COLORS  = { 1:"bg-indigo-100 text-indigo-700", 2:"bg-blue-100 text-blue-700", 3:"bg-slate-100 text-slate-600", 4:"bg-amber-100 text-amber-700" };
+    const SEG_COLORS   = { Champion:"bg-green-100 text-green-700", Pragmatist:"bg-sky-100 text-sky-700", Skeptic:"bg-red-100 text-red-700", Uninvolved:"bg-slate-100 text-slate-500" };
+    const SCHED_COLORS = { "Not Started":"bg-slate-100 text-slate-500", "Reached Out":"bg-yellow-100 text-yellow-700", Responded:"bg-sky-100 text-sky-700", Scheduled:"bg-indigo-100 text-indigo-700", Complete:"bg-green-100 text-green-700" };
+    const PAIN_COLORS  = { High:"text-red-600 font-semibold", Med:"text-amber-600 font-medium", Low:"text-green-600" };
+    const INF_COLORS   = { High:"text-indigo-700 font-semibold", Med:"text-slate-600", Low:"text-slate-400" };
+    const THEME_STATUS_COLORS   = { Emerging:"bg-amber-100 text-amber-700", Confirmed:"bg-green-100 text-green-700", Discarded:"bg-slate-100 text-slate-400" };
+    const INSIGHT_STATUS_COLORS = { Draft:"bg-slate-100 text-slate-500", Validated:"bg-blue-100 text-blue-700", Accepted:"bg-green-100 text-green-700", Deferred:"bg-amber-100 text-amber-700" };
+    function sentimentColor(n) {
+      if (n >= 1) return "bg-green-100 text-green-700";
+      if (n >= 0) return "bg-slate-100 text-slate-500";
+      if (n >= -1) return "bg-amber-100 text-amber-700";
+      return "bg-red-100 text-red-700";
+    }
+    function sentimentLabel(n) {
+      if (n >= 2) return "Very Positive"; if (n >= 1) return "Positive";
+      if (n >= 0) return "Neutral"; if (n >= -1) return "Negative"; return "Very Negative";
+    }
+
+    /* ─── defaults ─── */
+    const INIT_SECTION_LABELS = {
+      stakeholders:"Stakeholders", highlights:"Themes", insights:"Problem Statements",
+      matrix:"Opportunity Prioritization", status:"Tasks", results:"Results",
+    };
+
+    const DEFAULT_COL_CONFIG = [
+      { id:"role",       label:"Role / Group", visible:true,  required:true  },
+      { id:"poc",        label:"POC",          visible:true,  required:false },
+      { id:"team",       label:"Team",         visible:true,  required:false },
+      { id:"tier",       label:"Tier",         visible:true,  required:false },
+      { id:"segment",    label:"Segment",      visible:true,  required:false },
+      { id:"influence",  label:"Inf",          visible:true,  required:false },
+      { id:"pain",       label:"Pain",         visible:true,  required:false },
+      { id:"interview",  label:"Interview",    visible:true,  required:false },
+      { id:"scheduling", label:"Scheduling",   visible:true,  required:false },
+    ];
+
+    /* ─── initial data ─── */
+    const INIT_STAKEHOLDERS = [
+      { id:"s1",  name:"CS & Delivery Leadership", role:"CS & Delivery Leadership",   poc:"",                           team:"Customer Success", tier:1, segment:"Champion",   influence:"High", pain:"High", status:"Not Started", schedulingStatus:"Not Started", notes:"Owns the overall CS framework. Sees systemic gaps no one else sees." },
+      { id:"s2",  name:"CSM Team",                 role:"CS Leadership / CSM Leader", poc:"Jitu, Ashish, Nipun, Gautam", team:"Customer Success", tier:1, segment:"Champion",   influence:"High", pain:"High", status:"Not Started", schedulingStatus:"Not Started", notes:"Accountable for Nurture, Renewal, and Loss Analysis outcomes." },
+      { id:"s3",  name:"Sales Leadership",          role:"Sales Leadership",           poc:"",                           team:"Sales",            tier:1, segment:"Pragmatist", influence:"High", pain:"Med",  status:"Not Started", schedulingStatus:"Not Started", notes:"Controls handover quality. Will resist changes that add Sales friction." },
+      { id:"s4",  name:"Senior CSM",                role:"Customer Success Manager",   poc:"",                           team:"Customer Success", tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Not Started", schedulingStatus:"Not Started", notes:"20+ RACI touchpoints across all phases. Highest density of lived pain." },
+      { id:"s5",  name:"PM",                        role:"Project Manager",            poc:"Paresh",                     team:"Delivery",         tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Not Started", schedulingStatus:"Not Started", notes:"Accountable for entire Deploy phase — all three tracks simultaneously." },
+      { id:"s6",  name:"SC",                        role:"Solution Consultant",        poc:"",                           team:"Delivery",         tier:2, segment:"Pragmatist", influence:"Med",  pain:"Med",  status:"Not Started", schedulingStatus:"Not Started", notes:"Business Use Case Track owner. Ground-level view of what breaks." },
+      { id:"s7",  name:"TC",                        role:"Technical Consultant",       poc:"Kevin",                      team:"Delivery",         tier:2, segment:"Pragmatist", influence:"Low",  pain:"Med",  status:"Not Started", schedulingStatus:"Not Started", notes:"Responsible for Technical Track but rarely Accountable — may feel unheard." },
+      { id:"s8",  name:"Sales Rep (AE)",            role:"Sales Representative",       poc:"Colton, Zach",               team:"Sales",            tier:3, segment:"Skeptic",    influence:"Med",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Hands off and moves on. Sees CS framework as someone else's problem." },
+      { id:"s9",  name:"Product Management",        role:"Product Management",         poc:"",                           team:"Product",          tier:3, segment:"Pragmatist", influence:"Med",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Informed on strategic items. Can validate improvement direction." },
+      { id:"s10", name:"Support",                   role:"Support",                    poc:"",                           team:"Support",          tier:3, segment:"Uninvolved", influence:"Low",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Enters at Go-Live and Nurture. Limited upstream visibility." },
+      { id:"s11", name:"Pre Sales",                 role:"Pre Sales",                  poc:"Ankit",                      team:"Sales",            tier:3, segment:"Pragmatist", influence:"Med",  pain:"Med",  status:"Not Started", schedulingStatus:"Not Started", notes:"Involved in early customer qualification and solution framing." },
+      { id:"s12", name:"Finance",                   role:"Finance",                    poc:"",                           team:"Finance",          tier:3, segment:"Uninvolved", influence:"Low",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Involved in Loss Analysis cross-functional step." },
+      { id:"s13", name:"Marketing",                 role:"Marketing",                  poc:"Adam",                       team:"Marketing",        tier:3, segment:"Uninvolved", influence:"Low",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Lead generation perspective." },
+      { id:"s14", name:"Customer Delivery",         role:"Customer Delivery",          poc:"Amit",                       team:"Delivery",         tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Not Started", schedulingStatus:"Not Started", notes:"Accountable for delivery outcomes. Key perspective on Deploy phase friction." },
+      { id:"s15", name:"AI Team",                   role:"AI",                         poc:"Minakshi, Blessing",         team:"Product",          tier:3, segment:"Uninvolved", influence:"Low",  pain:"Low",  status:"Not Started", schedulingStatus:"Not Started", notes:"Emerging function. May inform future CS automation opportunities." },
+      { id:"s16", name:"Colton",                    role:"Account Executive",           poc:"Colton",                     team:"Sales",            tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"New to the system but highly self-aware about pain. Loves storytelling, dislikes evangelizing. Proactively offered to co-build BDR call scripts. Strong signal for sales enablement and pre-call research automation." },
+      { id:"s17", name:"Jitu",                       role:"Senior CSM",                 poc:"Jitu",                       team:"Customer Success", tier:1, segment:"Champion",   influence:"High", pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"Walked through full CSM lifecycle from handover to renewal. Core pain: no intelligence assist for usecase selection, no ready-made evangelism narrative. Hidden dep: his Statisfy health view depends on PM update discipline. Strong signal for Product Story Engine and Usecase Intelligence." },
+    ];
+
+
+    /* ─── interview / theme / insight records (populated by Claude) ─── */
+    const INIT_INTERVIEWS = [
+      {
+        id: "iv1", stakeholderId: "s2", source: "transcript", date: "2026-05-05",
+        sentiment: 1, urgency: 3,
+        summary: "Gautam Singh Deo — VP of CSM, AMEA/KSA. Team of ~20 (CSM + SCs across India, UAE, KSA). Uses Statisfy for account health insights. Core pain: information scattered across Salesforce, Excel, SharePoint, Teams, and Statisfy — manual triple-entry is standard workflow. 300+ renewal proposals/year are repetitive. Health checks are a 4-day unpaid service becoming unscalable in KSA due to partner-driven demand. Wants proactive external intelligence (M&A signals, leadership changes). CS AI adoption lags engineering. Budget (~$500/month for 20 people) is feasible with leadership backing from Vishal.",
+        quotes: [
+          "A lot of the information is being put up on multiple platforms — Salesforce, Excel sheets, SharePoint, Teams — it's three different transactions that one is doing as busy work, and one of these platforms may be left out.",
+          "Health checks are a four-day effort. With AI, if we can bring that down to half a day's effort — the volumes are increasing and it's a non-paid service to us.",
+          "This customer is going through an M&A — that opens up a lot of conversation opportunities. If an alert can come, nothing like it.",
+          "CS is a lag behind engineering in AI adoption, at least in India.",
+          "I would love to see a little more outcome coming through AI on the solution consulting side — health check reports, functional deployment studies, compliance reports."
+        ],
+        themes: ["Multi-platform Fragmentation", "Renewal Process Inefficiency", "Health Check Scalability", "Proactive Intelligence Gap"],
+        frictionAreas: ["Information Fragmentation", "Renewal Proposals", "Health Checks"],
+        actionItems: [
+          "Explore automated renewal proposal generation",
+          "Map Statisfy + Salesforce + SharePoint integration gaps",
+          "Prototype self-service health check portal concept for low-touch accounts",
+          "Share Glean CS use cases with Gautam and Nipun"
+        ]
+      },
+      {
+        id: "iv2", stakeholderId: "s7", source: "transcript", date: "2026-04-30",
+        sentiment: 0, urgency: 3,
+        summary: "Kevin Dias — Technical Consultant. Walked through FreshDesk (support portal) and ProTrack (implementation tracking). Key pain: high ticket inflow overwhelms agents during critical issues, forcing generic first responses that frustrate customers. Ticket type classification is manual and error-prone. In ProTrack, every upgrade requires manually updating 10+ component version fields — Kevin described this as work he 'really hated'. No integration between FreshDesk (support) and ProTrack (implementation).",
+        quotes: [
+          "I'm working on a critical issue and tickets are being assigned to me that I can't respond to — they end up sending generic responses that look automated and don't make sense to the customer.",
+          "I have to come to each and every component and update the version and configurations. As a tech guy, I really hated this work.",
+          "If I give an input saying I upgraded to this version of policy server, can automation help me fill in all the ProTrack component details?",
+          "Customers sometimes say 'I'm not able to open the file' — they don't give error screenshots, don't give exact steps. The first response needs to intelligently ask for the right info."
+        ],
+        themes: ["Support Triage Automation", "ProTrack Manual Version Tracking", "Multi-platform Fragmentation"],
+        frictionAreas: ["Support First Response", "Ticket Classification", "ProTrack Version Updates"],
+        actionItems: [
+          "Explore AI-powered first response automation in FreshDesk using KB article matching",
+          "Map ProTrack version dependency data model for automation",
+          "Connect with Nirupama Jaiswal (Support Manager) for SLA details"
+        ]
+      },
+      {
+        id: "iv3", stakeholderId: "s16", source: "notes", date: "2026-04-30",
+        sentiment: 1, urgency: 3,
+        summary: "Colton — Account Executive, Sales. New to the system. Manually researched DSPM competitors (Cyera, Securiti, etc.) with no internal resource. Wants an automated pre-meeting research brief covering company snapshot, key contacts, trends, and competitive context. Identified a gap in regional AE knowledge sharing — what's working by region or deal type isn't captured anywhere. Wants visibility into how BDRs are running initial conversations and qualifying fit. Proactively offered to co-build the BDR call script. Favorite work: crafting stories to meet customer needs. Dislikes: evangelizing and relationship-building cold tasks.",
+        quotes: [
+          "I had to research Cyera, Securiti, and others myself — there's no internal resource for that.",
+          "Before a meeting I want to know the company, the people I'm going to meet, the trends — complete research.",
+          "There should be a knowledge base for AEs — what's working in their region, so others can benefit.",
+          "My favorite thing is crafting a story to meet the customer's needs. My least favorite is the relationship-building and evangelizing.",
+          "I want to have an eye on what BDRs are doing — how the initial conversation is planned, and what can be done to get the right fit.",
+          "I'm happy to build the script if needed."
+        ],
+        themes: ["Pre-Call Research Gap", "AE Regional Knowledge Base", "BDR-AE Workflow Alignment", "Multi-platform Fragmentation", "Proactive Intelligence Gap"],
+        frictionAreas: ["Competitor Research", "Pre-call Prep", "Knowledge Sharing", "BDR Visibility"],
+        actionItems: [
+          "Invite Colton to co-author the BDR qualification script",
+          "Validate pre-meeting research brief concept with 2+ more AEs",
+          "Explore AE knowledge base structure — regional, product, deal-type dimensions"
+        ]
+      },
+      {
+        id: "iv4", stakeholderId: "s17", source: "notes", date: "2026-05-06",
+        sentiment: 1, urgency: 4,
+        summary: "Jitu (Senior CSM) walked through the full CSM lifecycle via whiteboard: PS handover → Salesforce as data backbone → Kickoff → Usecase mapping (CSM-owned) → Project management (PM-owned) → Statisfy for health tracking (Relationship, Friction, Adoption, Cost Factors) → Stakeholder 1:1s and PS/CSM reviews. Core pain: no tooling to help select the right usecases for a customer org — CSM does this manually. No ready-made narrative or 'story to evangelize' with customers. Wants account/customer trend monitoring to adapt conversations dynamically. Interest in in-customer marketing (vague). Hidden insight: Statisfy data quality depends on PM discipline, not CSM input — creating a gap in Jitu's health view.",
+        quotes: [
+          "I need support in the usecase mapping piece — picking the right usecases for the customer and organization, evangelizing them, and delivering on them.",
+          "It would be really great to have account mapping or customer mapping to follow customer trends and evangelize with them.",
+          "The primary thing they would need help with is to give them a story to evangelize with the customer — anything that helps.",
+          "I need to be involved in the project management piece when needed, but mostly PMs take care of it."
+        ],
+        themes: ["Usecase Selection & Evangelism Gap", "Proactive Intelligence Gap", "Multi-platform Fragmentation", "Product Story & Narrative Gap"],
+        frictionAreas: ["Usecase Selection", "Customer Evangelism Narrative", "Account Trend Monitoring", "Statisfy Data Dependency"],
+        actionItems: [
+          "Connect Jitu's account trend monitoring ask with Colton's company research ask — explore shared solution",
+          "Explore usecase intelligence concept: what does picking the right usecase look like today?",
+          "Clarify 'in-customer marketing tool' concept in follow-up session",
+          "Investigate CSM dependency on PM for Statisfy data freshness"
+        ]
+      }
+    ];
+    const INIT_THEMES = [
+      {
+        id: "t1", label: "Multi-platform Fragmentation",
+        summary: "Data scattered across Salesforce, Excel, SharePoint, Teams, Statisfy, FreshDesk, ProTrack, and ZoomInfo — forcing manual multi-platform entry and creating single-source-of-truth gaps across CS, Delivery, and Sales.",
+        frequency: 3, status: "Confirmed", stakeholderIds: ["s2","s7","s16"],
+        quotes: [
+          "It's three different transactions that one is doing as busy work — and one of these platforms may be left out.",
+          "No integration exists between FreshDesk (support) and ProTrack (implementation).",
+          "Tools like ZoomInfo and Salesforce exist but aren't synthesized — you still have to do the research yourself."
+        ]
+      },
+      {
+        id: "t2", label: "Manual Repetitive High-Volume Work",
+        summary: "High-frequency, low-value manual tasks dominate workflows: 300+ renewal proposals/year, 4-day health check reports per customer, manual version field updates per upgrade cycle in ProTrack.",
+        frequency: 2, status: "Confirmed", stakeholderIds: ["s2","s7"],
+        quotes: [
+          "It doesn't take more than 10 minutes to create a renewal proposal, but the volumes are 300+ per year and there are iterations.",
+          "I really hated updating each component version field manually in ProTrack."
+        ]
+      },
+      {
+        id: "t3", label: "Support Triage & First Response Gap",
+        summary: "When agents are occupied with critical issues, new tickets receive generic or no first responses. Smart KB article matching and automated triage are absent.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s7"],
+        quotes: [
+          "They end up sending responses which look like a generic automated response and do not really make sense to the customer."
+        ]
+      },
+      {
+        id: "t4", label: "Proactive Intelligence Gap",
+        summary: "Three distinct roles — CSM (Gautam), AE (Colton), and Senior CSM (Jitu) — all independently need automated external intelligence. CSMs miss account signals, AEs manually research competitors, CSMs lack account trend monitoring to adapt their evangelism narrative.",
+        frequency: 3, status: "Confirmed", stakeholderIds: ["s2","s16","s17"],
+        quotes: [
+          "If this customer is going through an M&A, that opens up a lot of conversation opportunities. If an alert can come, nothing like it.",
+          "I had to research Cyera, Securiti, and others myself — there's no internal resource for that.",
+          "It would be really great to have account mapping or customer mapping to follow customer trends and evangelize with them."
+        ]
+      },
+      {
+        id: "t5", label: "Health Check Scalability Problem",
+        summary: "Customer health checks are a 4-day non-monetized effort. KSA partner-driven demand is growing with no capacity increase. High-touch vs. low-touch delivery is unresolved.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s2"],
+        quotes: [
+          "It's a four-day effort and it's a non-paid service. For low-touch accounts — if they can go to a portal, click, and get a health check, that would be wonderful."
+        ]
+      },
+      {
+        id: "t6", label: "Pre-Call Research Gap",
+        summary: "AEs have no automated support for pre-meeting research. Competitor landscape (DSPM: Cyera, Securiti), company background, key contacts, and market trends are researched manually — often not at all for time-constrained AEs.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s16"],
+        quotes: [
+          "I had to research Cyera, Securiti, and others myself — there's no internal resource for that.",
+          "Before a meeting I want to know the company, the people I'm going to meet, the trends — complete research."
+        ]
+      },
+      {
+        id: "t7", label: "Product Story & Narrative Gap",
+        summary: "Both AEs (pre-sale) and CSMs (post-sale) lack a ready-made, intelligent narrative about what Seclore can do. AEs build competitive stories from scratch; CSMs have no 'story to evangelize' with customers. Same root gap, two different contexts.",
+        frequency: 2, status: "Confirmed", stakeholderIds: ["s16","s17"],
+        quotes: [
+          "There should be a knowledge base for AEs — what's working in their region, so others can benefit.",
+          "The primary thing they would need help with is to give them a story to evangelize with the customer — anything that helps."
+        ]
+      },
+      {
+        id: "t8", label: "BDR-AE Workflow Alignment",
+        summary: "AEs lack visibility into how BDRs are running initial qualification conversations. Initial call scripts and fit criteria are inconsistent, creating quality variance in handoffs before the AE even enters the deal.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s16"],
+        quotes: [
+          "I want to have an eye on what BDRs are doing — how the initial conversation is planned, and what can be done to get the right fit.",
+          "I'm happy to build the script if needed."
+        ]
+      },
+      {
+        id: "t9", label: "Usecase Selection & Evangelism Gap",
+        summary: "CSMs must manually identify, select, and prioritize the right Seclore usecases for each customer organization — no intelligence or tooling exists to assist. After selection, they must build and deliver the evangelism narrative without structured support.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s17"],
+        quotes: [
+          "I need support in the usecase mapping piece — picking the right usecases for the customer and organization, evangelizing them, and delivering on them."
+        ]
+      }
+    ];
+    const INIT_INSIGHTS = [
+      {
+        id:"ps1", themeId:"t1", impact:"High", status:"Validated", stakeholderIds:["s2","s7"],
+        hmw:"How might we give CS and Delivery teams a single source of truth that eliminates redundant multi-platform data entry?",
+        jtbd:"When I update account status, I want it reflected everywhere automatically, so I can focus on the customer — not data hygiene.",
+        fiveWhys:[
+          "CS and Delivery teams enter the same data in 3–5 different platforms",
+          "No integration exists between Salesforce, Statisfy, SharePoint, Teams, and ProTrack",
+          "Each tool was procured independently without an integration mandate",
+          "No single operational system owner exists across CS and Delivery",
+          "CS and Delivery were historically managed as separate functions with separate toolstacks"
+        ]
+      },
+      {
+        id:"ps2", themeId:"t2", impact:"High", status:"Validated", stakeholderIds:["s2","s7"],
+        hmw:"How might we automate high-volume repetitive work so CSMs and TCs spend time on strategy and customer relationships — not copy-paste?",
+        jtbd:"When a renewal is due or a version upgrade runs, I want the system to pre-fill the output, so I can review and send instead of building from scratch.",
+        fiveWhys:[
+          "300+ renewal proposals/year are created manually; every ProTrack upgrade requires 10+ field updates",
+          "No template + data-extraction automation exists for either workflow",
+          "Salesforce and ProTrack data is not structured for programmatic extraction",
+          "No automation mandate or owner assigned to either process",
+          "Automation was not part of original tool procurement scope"
+        ]
+      },
+      {
+        id:"ps3", themeId:"t3", impact:"Med", status:"Draft", stakeholderIds:["s7"],
+        hmw:"How might we ensure every support ticket gets an intelligent, context-aware first response within SLA — even when agents are fully occupied?",
+        jtbd:"When a new ticket arrives during a critical incident, I want it auto-triaged and pre-drafted with smart info-gathering prompts, so customers feel heard immediately.",
+        fiveWhys:[
+          "Agents occupied with critical issues cannot respond to new tickets in time",
+          "No automated triage or first-response drafting exists in FreshDesk",
+          "KB articles are not indexed for auto-matching to incoming ticket text",
+          "FreshDesk was configured for basic ticketing, not intelligence-assisted triage",
+          "Support tooling investment hasn't kept pace with ticket volume growth"
+        ]
+      },
+      {
+        id:"ps4", themeId:"t4", impact:"High", status:"Validated", stakeholderIds:["s2","s16","s17"],
+        hmw:"How might we surface external signals — account trends, M&A activity, competitor landscape, market movements — to CSMs and AEs automatically before each customer interaction?",
+        jtbd:"When I'm preparing for a customer meeting, QBR, or new deal, I want relevant external context delivered to me in role-specific format, so I can walk in informed and lead the conversation instead of reacting to what the customer brings up.",
+        fiveWhys:[
+          "CSMs, AEs, and senior CSMs all operate without automated external intelligence — three separate roles, same underlying gap",
+          "No external intelligence feed is integrated into CS or Sales workflows in any role",
+          "ZoomInfo, Salesforce, Statisfy, and news signals exist in silos — never synthesized into a role-aware brief",
+          "External signal monitoring and account trend analysis were never scoped as workflow requirements",
+          "CS and Sales tools were built for reactive execution, not proactive intelligence delivery"
+        ]
+      },
+      {
+        id:"ps5", themeId:"t5", impact:"High", status:"Draft", stakeholderIds:["s2"],
+        hmw:"How might we deliver health checks to low-touch accounts at scale without requiring 4 days of CSM effort per check?",
+        jtbd:"When a low-touch account needs a health check, I want them to initiate it and get a branded report automatically, so I can redirect high-touch effort to strategic accounts.",
+        fiveWhys:[
+          "Health checks are a 4-day non-monetized effort, scaling linearly with account volume",
+          "Each health check is manually compiled from multiple data sources with no automation",
+          "No self-service portal or automated report generation exists",
+          "Health checks were designed as high-touch consulting deliverables, not scalable products",
+          "Low-touch vs. high-touch account segmentation has not been operationalized"
+        ]
+      },
+      {
+        id:"ps6", themeId:"t6", impact:"High", status:"Draft", stakeholderIds:["s16"],
+        hmw:"How might we give AEs a complete, ready-to-use pre-meeting brief on the prospect, their contacts, and the competitive landscape — before the meeting starts?",
+        jtbd:"When I have a meeting booked with a prospect, I want an automated brief covering their company, key people, recent news, and relevant competitors like Cyera and Securiti, so I can spend my prep time crafting the story instead of doing research.",
+        fiveWhys:[
+          "AEs manually research company background, key contacts, and DSPM competitors before every initial meeting",
+          "No internal tool synthesizes ZoomInfo, Salesforce, and public signals into a structured pre-call brief",
+          "ZoomInfo and Salesforce data are available but not templated into a meeting-ready format",
+          "Pre-call prep was never defined as a workflow to be automated or standardized",
+          "Sales tooling was procured for contact data and CRM tracking, not meeting intelligence delivery"
+        ]
+      },
+      {
+        id:"ps7", themeId:"t7", impact:"High", status:"Validated", stakeholderIds:["s16","s17"],
+        hmw:"How might we give every AE and CSM a ready-made, context-aware product story — one that knows Seclore's capabilities, competitive differentiators, and what's landed with similar customers — so they never walk into a conversation empty-handed?",
+        jtbd:"When I'm preparing to position Seclore with a new prospect or evangelize with an existing customer, I want a product coach that gives me a tested narrative tailored to their context, so I can focus on the relationship and delivery instead of constructing the story from memory.",
+        fiveWhys:[
+          "Both AEs (pre-sale) and CSMs (post-sale) lack a shared, intelligent source for product narratives and evangelism stories",
+          "Seclore product capabilities, competitive positioning, and successful customer stories are not structured into a usable, searchable resource",
+          "Winning narratives and successful deal patterns are never captured and shared after a deal closes or a usecase is delivered",
+          "Sales and CS onboarding do not include a living knowledge base that updates with the team's experience",
+          "No system exists to translate individual expertise — what an AE or CSM learns in the field — into institutional knowledge"
+        ]
+      },
+      {
+        id:"ps8", themeId:"t8", impact:"Med", status:"Draft", stakeholderIds:["s16"],
+        hmw:"How might we ensure BDRs qualify the right-fit leads with consistent language and criteria so AEs inherit conversations worth continuing?",
+        jtbd:"When a BDR hands off a lead, I want to know it was qualified with a proven script and clear fit criteria, so I can pick up the conversation without re-establishing basics the BDR should have covered.",
+        fiveWhys:[
+          "AEs receive handed-off leads without visibility into how BDRs qualified them or what was communicated",
+          "BDR call scripts and qualification criteria are inconsistent — no shared framework has been defined",
+          "BDR and AE workflows were set up independently without a handoff protocol",
+          "BDR performance metrics focus on volume booked, not quality of handoff to AE",
+          "No feedback loop exists for AEs to signal when a BDR handoff was low quality"
+        ]
+      },
+      {
+        id:"ps9", themeId:"t9", impact:"High", status:"Draft", stakeholderIds:["s17"],
+        hmw:"How might we help CSMs identify and prioritize the right Seclore usecases for each customer organization — and give them a ready-made delivery and evangelism plan to go with it?",
+        jtbd:"When I'm onboarding a new customer or planning a QBR, I want an intelligent recommendation of which Seclore usecases fit their organization — based on their industry, size, and current adoption — so I can build a credible roadmap instead of guessing which features to champion.",
+        fiveWhys:[
+          "CSMs manually identify usecases for each customer with no structured intelligence or recommendation system",
+          "No system maps customer attributes (industry, size, adoption stage) to recommended Seclore usecases",
+          "Usecase selection relies entirely on individual CSM experience and tribal knowledge",
+          "Successful usecase delivery patterns from other accounts are never systematically captured or reused",
+          "Seclore's product catalog and implementation playbooks are not connected to customer profile data"
+        ]
+      }
+    ];
+
+    const INIT_OPPORTUNITIES = [
+      {
+        id:"op1", title:"ProTrack Version Auto-Fill",
+        description:"When a TC specifies a product version upgrade, automatically propagate all dependent component version and config fields in ProTrack — eliminating 10+ manual field updates per upgrade cycle.",
+        themeIds:["t2"], stakeholderIds:["s7"],
+        reach:5, impact:8, confidence:8, effort:3,
+        effortLabel:"S", horizon:"Now", status:"Approved",
+        tags:["ProTrack","Delivery","Automation"],
+        successMetrics:["Version upgrade field updates: 10+ manual → 0 manual","Time per upgrade cycle: ~20 min → <2 min"],
+        antiUseCases:["Custom non-standard upgrades with exception dependencies","Multi-product upgrades with conflicting version constraints"],
+        notes:"Kevin: 'I really hated this work.' Dependency data model exists in ProTrack — needs mapping + propagation logic."
+      },
+      {
+        id:"op2", title:"AI Renewal Proposal Generator",
+        description:"Auto-generate renewal proposals by pulling account data from Salesforce and populating a standardized template — reducing 300+ annual proposals from manual build to review-and-send.",
+        themeIds:["t2","t1"], stakeholderIds:["s2"],
+        reach:8, impact:8, confidence:6, effort:5,
+        effortLabel:"M", horizon:"Next", status:"Under Evaluation",
+        tags:["Renewal","Salesforce","CSM"],
+        successMetrics:["Proposal creation time: 10–30 min → <5 min review","300+ proposals/year handled without incremental CSM time"],
+        antiUseCases:["Strategic enterprise renewals requiring bespoke pricing narrative","First renewal for complex accounts with non-standard terms"],
+        notes:"Gautam confirmed 300+ proposals/year with iterations. Champion stakeholder. High volume, template-friendly workflow."
+      },
+      {
+        id:"op3", title:"FreshDesk AI First Responder",
+        description:"When a support agent is unavailable, auto-triage incoming tickets using KB article matching, draft an intelligent first response with contextual info-gathering prompts, and assign to the right queue.",
+        themeIds:["t3","t1"], stakeholderIds:["s7"],
+        reach:7, impact:8, confidence:6, effort:5,
+        effortLabel:"M", horizon:"Next", status:"Candidate",
+        tags:["FreshDesk","Support","Triage"],
+        successMetrics:["First response time during critical incidents: missed SLA → within SLA","Generic automated responses: eliminated","Ticket misclassification rate: reduced 50%+"],
+        antiUseCases:["Complex multi-system critical incidents requiring engineer judgment","New product areas with no KB coverage yet"],
+        notes:"Kevin: 'Responses look like a generic automated response that don't make sense to the customer.' Connect with Nirupama Jaiswal for SLA baseline."
+      },
+      {
+        id:"op4", title:"External Customer Signal Intelligence",
+        description:"Surface external signals — M&A activity, leadership changes, funding events — into CSM workflow as proactive alerts tied to specific accounts.",
+        themeIds:["t4"], stakeholderIds:["s2"],
+        reach:8, impact:7, confidence:4, effort:6,
+        effortLabel:"L", horizon:"Later", status:"Candidate",
+        tags:["Intelligence","CSM","Proactive"],
+        successMetrics:["CSMs aware of material customer events before next QBR","Renewal reframed proactively in ≥80% of flagged cases"],
+        antiUseCases:["Accounts in regulated industries where external monitoring raises compliance issues","SMB accounts with low signal density"],
+        notes:"Gautam: 'If an alert can come, nothing like it.' Requires news API or LinkedIn signals. Confidence low — needs validation."
+      },
+      {
+        id:"op5", title:"Self-Service Health Check Portal",
+        description:"Low-touch accounts access a self-service portal, input configuration details, and receive a fully branded health check report automatically — no CSM involvement required.",
+        themeIds:["t5","t2"], stakeholderIds:["s2"],
+        reach:6, impact:9, confidence:5, effort:7,
+        effortLabel:"L", horizon:"Later", status:"Candidate",
+        tags:["Health Check","Self-Service","Scale"],
+        successMetrics:["Health check delivery time: 4 days → <1 hour for low-touch accounts","Low-touch capacity: scales with account volume, not headcount"],
+        antiUseCases:["High-touch strategic accounts where relationship delivery is the value","Initial health checks for complex new deployments"],
+        notes:"Gautam: 'If they can go to a portal, click, and get a health check, that would be wonderful.' KSA partner demand growing and unserved."
+      },
+      {
+        id:"op6", title:"AE Pre-Meeting Research Brief",
+        description:"Auto-generate a pre-call research brief before each customer meeting: company snapshot, key contacts, recent news, DSPM competitor context, and suggested talking points — synthesized from ZoomInfo, Salesforce, and news signals into a single doc delivered before the meeting.",
+        themeIds:["t6","t4","t1"], stakeholderIds:["s16"],
+        reach:7, impact:7, confidence:6, effort:5,
+        effortLabel:"M", horizon:"Next", status:"Candidate",
+        tags:["Sales","Pre-Call","Research","Automation"],
+        successMetrics:["Pre-meeting research time: 30–60 min manual → <5 min review","AE meeting prep completion rate: from ad hoc → consistent for all booked meetings"],
+        antiUseCases:["Strategic renewal calls where deep relationship history matters more than market research","Internal sync calls with no external company context needed"],
+        notes:"Colton: 'I had to research Cyera, Securiti, and others myself — there's no internal resource.' Single-source validation — needs 2+ AE corroboration before committing. Confidence capped at 6."
+      },
+      {
+        id:"op7", title:"Seclore Product Story Engine",
+        description:"A living, role-aware intelligence layer that gives AEs a tested competitive narrative before a deal and gives CSMs an evangelism story before a customer meeting — drawing from product capabilities, winning deal patterns, and successful usecase deliveries. One source, two contexts: pre-sale and post-sale.",
+        themeIds:["t7","t1"], stakeholderIds:["s16","s17"],
+        reach:8, impact:8, confidence:6, effort:6,
+        effortLabel:"M", horizon:"Next", status:"Candidate",
+        tags:["Sales","CSM","Knowledge","Evangelism","Product Coach"],
+        successMetrics:["AE time building competitive narrative: ad hoc → <10 min review","CSM time preparing evangelism story: 30+ min → guided framework in <5 min","AE + CSM-reported confidence in product positioning: quarterly survey baseline"],
+        antiUseCases:["Highly bespoke enterprise deals requiring custom narrative construction","Early-stage accounts where no pattern exists yet to draw from"],
+        notes:"Colton: 'There should be a knowledge base for AEs.' Jitu: 'The primary thing they need is a story to evangelize with the customer.' Two roles, same gap. Confidence 6 — two sources but needs product and enablement team input to scope. High reach once built."
+      },
+      {
+        id:"op8", title:"Usecase Intelligence Advisor",
+        description:"When a CSM is onboarding a new account or planning a QBR, automatically recommend the highest-priority Seclore usecases for that customer — based on their industry, organization size, current adoption stage, and patterns from similar accounts. Outputs a ranked usecase roadmap with an evangelism brief per usecase.",
+        themeIds:["t9","t7"], stakeholderIds:["s17"],
+        reach:6, impact:8, confidence:5, effort:5,
+        effortLabel:"M", horizon:"Next", status:"Candidate",
+        tags:["CSM","Usecase","Adoption","Intelligence"],
+        successMetrics:["Usecase selection time per account: manual/ad hoc → structured in <15 min","CSM-reported confidence in usecase roadmap: measured at QBR prep","Adoption rate of recommended usecases vs. CSM-chosen: track over 2 quarters"],
+        antiUseCases:["Strategic enterprise accounts with highly custom implementation paths","Accounts in regulated industries where usecase selection requires compliance review"],
+        notes:"Jitu: 'I need support in the usecase mapping piece — picking the right usecases for the customer and organization.' Single-source validation — confidence capped at 5. Strong conceptual fit with Product Story Engine (op7); likely built together or sequenced."
+      }
+    ];
+
+    const PURGED_RESULT_IDS = new Set(["res1","res2","res3","res4","res5","res6","res7","res8"]);
+
+    const INIT_RESULTS = [];
+
+    const INIT_TASKS = [];
+
+    /* ════════════════════════════════════════════════════════
+       COMPONENTS — all defined OUTSIDE App to prevent
+       React from unmounting them on every parent re-render
+       (which would break input focus / typing)
+    ════════════════════════════════════════════════════════ */
+
+    function Badge({ label, colorClass }) {
+      return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>{label}</span>;
+    }
+
+    const TOOLTIPS = {
+      "Now":              "This quarter — highest execution priority",
+      "Next":             "Next quarter — in the pipeline, not yet committed",
+      "Later":            "Backlog — valuable but not in near-term focus",
+      "Candidate":        "Identified but not yet evaluated or committed",
+      "Under Evaluation": "Being assessed for feasibility and priority",
+      "Approved":         "Committed to build — on the roadmap",
+      "In Progress":      "Currently being built or rolled out",
+      "Delivered":        "Shipped — measure outcomes",
+      "Rejected":         "Assessed and deprioritized",
+      "S":  "Small effort (1–2) — quick win, minimal build",
+      "M":  "Medium effort (3–4) — weeks of work, moderate complexity",
+      "L":  "Large effort (5–7) — significant build, multiple stakeholders",
+      "XL": "Extra large effort (8–10) — major initiative, high coordination",
+    };
+
+    function InfoTip({ term }) {
+      const text = TOOLTIPS[term];
+      if (!text) return null;
+      return (
+        <span className="relative group inline-flex items-center ml-0.5">
+          <span className="cursor-help text-slate-300 hover:text-[#3D35C0] text-[10px] italic font-serif border border-slate-300 hover:border-[#3D35C0] rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none transition-colors">i</span>
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-slate-800 text-white text-xs rounded-lg px-2.5 py-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 leading-snug whitespace-normal text-center shadow-lg">{text}</span>
+        </span>
+      );
+    }
+
+    function effortToLabel(n) {
+      if (n <= 3) return "S";
+      if (n <= 5) return "M";
+      if (n <= 7) return "L";
+      return "XL";
+    }
+
+    function EmptyState({ msg }) {
+      return (
+        <div className="py-20 text-center">
+          <div className="text-5xl text-slate-200 mb-4">○</div>
+          <p className="text-slate-500 font-medium">{msg}</p>
+          <p className="text-slate-400 text-sm mt-1">Paste a transcript, notes, or any document in the Claude chat — this section updates automatically.</p>
+        </div>
+      );
+    }
+
+    /* ── Column editor dropdown ── */
+    function ColEditor({ colConfig, setColConfig }) {
+      const [open, setOpen] = useState(false);
+      const ref = useRef(null);
+      useEffect(() => {
+        function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+      }, []);
+      function toggle(id) {
+        setColConfig(prev => prev.map(c => c.id === id && !c.required ? {...c, visible: !c.visible} : c));
+      }
+      function rename(id, label) {
+        setColConfig(prev => prev.map(c => c.id === id ? {...c, label} : c));
+      }
+      return (
+        <div className="relative" ref={ref}>
+          <button onClick={() => setOpen(o => !o)}
+            className="flex items-center gap-1 text-xs border border-slate-200 rounded px-2.5 py-1.5 text-slate-500 hover:text-slate-700 hover:border-slate-300 bg-white transition-colors">
+            Columns <span className="text-slate-300">▾</span>
+          </button>
+          {open && (
+            <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 w-60 p-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Show / rename columns</p>
+              <div className="space-y-1">
+                {colConfig.map(col => (
+                  <div key={col.id} className="flex items-center gap-2">
+                    <input type="checkbox" checked={col.visible} disabled={col.required}
+                      onChange={() => toggle(col.id)}
+                      className="rounded border-slate-300 text-[#3D35C0] cursor-pointer disabled:opacity-40 flex-shrink-0" />
+                    <input type="text" value={col.label}
+                      onChange={e => rename(col.id, e.target.value)}
+                      className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-300 bg-white" />
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setColConfig(DEFAULT_COL_CONFIG)}
+                className="mt-3 w-full text-xs text-slate-400 hover:text-slate-600 text-center">Reset to defaults</button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Single interview record card ── */
+    function InterviewCard({ interview }) {
+      const [open, setOpen] = useState(false);
+      const srcColors = {
+        transcript:"bg-purple-50 text-[#3D35C0] border-purple-200",
+        notes:     "bg-sky-50 text-sky-600 border-sky-200",
+        email:     "bg-violet-50 text-violet-600 border-violet-200",
+        survey:    "bg-teal-50 text-teal-600 border-teal-200",
+        doc:       "bg-slate-50 text-slate-600 border-slate-200",
+        meeting:   "bg-amber-50 text-amber-600 border-amber-200",
+      };
+      const cls = srcColors[interview.source] || srcColors.notes;
+      return (
+        <div className="mt-2 border rounded-lg overflow-hidden">
+          <div className={`flex items-center justify-between px-3 py-2 cursor-pointer border-b ${cls}`}
+            onClick={() => setOpen(o => !o)}>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold capitalize">{interview.source}</span>
+              <span className="text-xs opacity-70">{interview.date}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge label={sentimentLabel(interview.sentiment)} colorClass={sentimentColor(interview.sentiment)} />
+              {interview.urgency && <Badge label={`Urgency ${interview.urgency}/5`} colorClass="bg-slate-100 text-slate-500" />}
+              <span className="text-xs opacity-50">{open ? "▲" : "▼"}</span>
+            </div>
+          </div>
+          {open && (
+            <div className="p-3 bg-white space-y-3">
+              {interview.summary && <p className="text-xs text-slate-700 leading-relaxed">{interview.summary}</p>}
+              {interview.quotes?.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Key Quotes</p>
+                  {interview.quotes.map((q, i) => (
+                    <p key={i} className="text-xs text-slate-600 italic border-l-2 border-indigo-200 pl-2">"{q}"</p>
+                  ))}
+                </div>
+              )}
+              {interview.themes?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Themes</p>
+                  <div className="flex flex-wrap gap-1">
+                    {interview.themes.map((t, i) => <span key={i} className="text-xs bg-purple-100 text-[#3D35C0] px-2 py-0.5 rounded-full">{t}</span>)}
+                  </div>
+                </div>
+              )}
+              {interview.frictionAreas?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Friction Areas</p>
+                  <div className="flex flex-wrap gap-1">
+                    {interview.frictionAreas.map((f, i) => <span key={i} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{f}</span>)}
+                  </div>
+                </div>
+              )}
+              {interview.actionItems?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Action Items</p>
+                  <ul className="space-y-0.5">
+                    {interview.actionItems.map((a, i) => (
+                      <li key={i} className="text-xs text-slate-600 flex gap-1.5"><span className="text-indigo-300">→</span>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Expanded stakeholder row ── */
+    function ExpandedRow({ s, updS, interviews, newNote, setNewNote }) {
+      const sInterviews = interviews.filter(i => i.stakeholderId === s.id);
+      return (
+        <div className="px-6 py-4">
+          <div className="grid grid-cols-3 gap-4 mb-3">
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Role / Group</label>
+              <input type="text" value={s.name} onChange={e => updS(s.id, "name", e.target.value)}
+                className="w-full text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">POC / Names</label>
+              <input type="text" value={s.poc || ""} onChange={e => updS(s.id, "poc", e.target.value)}
+                placeholder="e.g. Jane, John"
+                className="w-full text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Team</label>
+              <input type="text" value={s.team} onChange={e => updS(s.id, "team", e.target.value)}
+                className="w-full text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4 mb-3">
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Tier</label>
+              <select value={s.tier} onChange={e => updS(s.id, "tier", Number(e.target.value))}
+                className="w-full text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300">
+                {[1,2,3,4].map(n => <option key={n} value={n}>{n} — {TIER_LABELS[n]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Segment</label>
+              <select value={s.segment} onChange={e => updS(s.id, "segment", e.target.value)}
+                className="w-full text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300">
+                {["Champion","Pragmatist","Skeptic","Uninvolved"].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Influence / Pain</label>
+              <div className="flex gap-2">
+                <select value={s.influence} onChange={e => updS(s.id, "influence", e.target.value)}
+                  className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300">
+                  {["High","Med","Low"].map(o => <option key={o}>{o}</option>)}
+                </select>
+                <select value={s.pain} onChange={e => updS(s.id, "pain", e.target.value)}
+                  className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-purple-300">
+                  {["High","Med","Low"].map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mb-2"><span className="font-medium text-slate-700">Context: </span>{s.notes}</p>
+          <textarea rows={2} placeholder="Quick notes…"
+            value={newNote[s.id] || ""}
+            onChange={e => setNewNote(n => ({...n, [s.id]: e.target.value}))}
+            className="w-full text-xs border border-slate-200 rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 bg-white" />
+          {sInterviews.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Interview Records ({sInterviews.length})</p>
+              {sInterviews.map(iv => <InterviewCard key={iv.id} interview={iv} />)}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Stakeholders section ── */
+    function SectionStakeholders({ stakeholders, interviews, newNote, setNewNote, updS, delS, done, colConfig, setColConfig }) {
+      const [expanded, setExpanded] = useState({});
+      const visCols = colConfig.filter(c => c.visible);
+      const colSpan = visCols.length + 1; // +1 for delete button
+
+      function renderCell(s, colId) {
+        switch(colId) {
+          case "role": return (
+            <td key="role" className="py-2 pr-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-300 text-xs select-none">{expanded[s.id] ? "▲" : "▼"}</span>
+                <span className="font-medium text-slate-800">{s.name}</span>
+                {interviews.filter(i => i.stakeholderId === s.id).length > 0 && (
+                  <span className="text-xs bg-purple-100 text-[#3D35C0] rounded-full px-1.5 font-medium">
+                    {interviews.filter(i => i.stakeholderId === s.id).length}
+                  </span>
+                )}
+              </div>
+            </td>
+          );
+          case "poc": return (
+            <td key="poc" className="py-2 pr-3" onClick={e => e.stopPropagation()}>
+              <input type="text" value={s.poc || ""} onChange={e => updS(s.id, "poc", e.target.value)}
+                placeholder="Add name(s)…"
+                className="text-xs text-slate-600 bg-transparent border-0 focus:outline-none focus:bg-white focus:border focus:border-indigo-200 rounded px-1 w-28 placeholder-slate-300" />
+            </td>
+          );
+          case "team": return <td key="team" className="py-2 pr-3 text-slate-500 text-xs">{s.team}</td>;
+          case "tier": return <td key="tier" className="py-2 pr-3"><Badge label={TIER_LABELS[s.tier]} colorClass={TIER_COLORS[s.tier]} /></td>;
+          case "segment": return <td key="segment" className="py-2 pr-3"><Badge label={s.segment} colorClass={SEG_COLORS[s.segment]} /></td>;
+          case "influence": return <td key="influence" className={`py-2 pr-3 text-xs ${INF_COLORS[s.influence]}`}>{s.influence}</td>;
+          case "pain": return <td key="pain" className={`py-2 pr-3 text-xs ${PAIN_COLORS[s.pain]}`}>{s.pain}</td>;
+          case "interview": return (
+            <td key="interview" className="py-2 pr-3" onClick={e => e.stopPropagation()}>
+              <select className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer" value={s.status} onChange={e => updS(s.id, "status", e.target.value)}>
+                {["Not Started","Scheduled","In Progress","Complete"].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </td>
+          );
+          case "scheduling": return (
+            <td key="scheduling" className="py-2 pr-3" onClick={e => e.stopPropagation()}>
+              <select className="text-xs bg-transparent border-0 focus:outline-none cursor-pointer" value={s.schedulingStatus} onChange={e => updS(s.id, "schedulingStatus", e.target.value)}>
+                {["Not Started","Reached Out","Responded","Scheduled","Complete"].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </td>
+          );
+          default: return null;
+        }
+      }
+
+      return (
+        <div className="space-y-8">
+          {/* Stakeholder table */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-800">
+                Stakeholders
+                <span className="text-sm font-normal text-slate-400 ml-2">{stakeholders.length} total · {done} interviewed</span>
+              </h2>
+              <ColEditor colConfig={colConfig} setColConfig={setColConfig} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs text-slate-400 uppercase tracking-wide">
+                    {visCols.map(col => <th key={col.id} className="pb-2 pr-3 font-medium">{col.label}</th>)}
+                    <th className="pb-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stakeholders.map(s => (
+                    <React.Fragment key={s.id}>
+                      <tr className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+                        onClick={() => setExpanded(e => ({...e, [s.id]: !e[s.id]}))}>
+                        {visCols.map(col => renderCell(s, col.id))}
+                        <td className="py-2" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => delS(s.id)}
+                            className="text-slate-300 hover:text-red-500 hover:bg-red-50 rounded px-1.5 py-0.5 text-xs transition-colors" title="Remove row">✕</button>
+                        </td>
+                      </tr>
+                      {expanded[s.id] && (
+                        <tr className="bg-slate-50">
+                          <td colSpan={colSpan}>
+                            <ExpandedRow s={s} updS={updS} interviews={interviews} newNote={newNote} setNewNote={setNewNote} />
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      );
+    }
+
+    /* ── Highlights section ── */
+    function SectionHighlights({ themes, stakeholders }) {
+      return (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800 mb-2">
+            Themes
+            {themes.length > 0 && <span className="text-sm font-normal text-slate-400 ml-2">{themes.length} identified</span>}
+          </h2>
+          {themes.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {themes.map(theme => {
+                const involved = stakeholders.filter(s => theme.stakeholderIds?.includes(s.id));
+                return (
+                  <div key={theme.id} className="p-3 border border-slate-200 rounded-lg bg-white">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 text-sm leading-tight">{theme.label}</p>
+                        {theme.summary && <p className="text-xs text-slate-500 mt-0.5 leading-snug">{theme.summary}</p>}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-xs text-slate-400">{theme.frequency}x</span>
+                        <Badge label={theme.status} colorClass={THEME_STATUS_COLORS[theme.status] || "bg-slate-100 text-slate-500"} />
+                      </div>
+                    </div>
+                    {theme.quotes?.slice(0,1).map((q, i) => (
+                      <p key={i} className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2 mb-1 leading-snug">"{q}"</p>
+                    ))}
+                    {involved.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {involved.map(s => <span key={s.id} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">{s.name}</span>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Insights section ── */
+    function SectionInsights({ insights, themes, stakeholders }) {
+      const [openId, setOpenId] = useState(null);
+      if (insights.length === 0) return null;
+      return (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800 mb-2">Problem Statements
+            <span className="text-sm font-normal text-slate-400 ml-2">{insights.length} identified</span>
+          </h2>
+          <div className="grid grid-cols-2 gap-2">
+            {insights.map(ps => {
+              const relatedTheme = themes.find(t => t.id === ps.themeId);
+              const affected = stakeholders.filter(s => ps.stakeholderIds?.includes(s.id));
+              return (
+                <div key={ps.id} className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-semibold text-slate-800 text-xs leading-snug">{ps.hmw}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Badge label={ps.impact} colorClass={ps.impact==="High"?"bg-red-100 text-red-700":ps.impact==="Med"?"bg-amber-100 text-amber-700":"bg-green-100 text-green-700"} />
+                        <Badge label={ps.status} colorClass={INSIGHT_STATUS_COLORS[ps.status]||"bg-slate-100 text-slate-500"} />
+                      </div>
+                    </div>
+                    {ps.jtbd && <p className="text-xs text-slate-400 italic mb-1 leading-snug">"{ps.jtbd}"</p>}
+                    {affected.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        {affected.map(s => <span key={s.id} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">{s.name}</span>)}
+                      </div>
+                    )}
+                    {ps.fiveWhys?.length > 0 && (
+                      <button onClick={() => setOpenId(openId===ps.id?null:ps.id)}
+                        className="no-print text-xs text-[#3D35C0] hover:text-[#2A2490]">
+                        {openId===ps.id?"▲ Hide":"▼ Show"} 5 Whys
+                      </button>
+                    )}
+                    {openId===ps.id && ps.fiveWhys?.map((w,i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-slate-600 mt-1">
+                        <span className="text-purple-300 font-bold flex-shrink-0">Why {i+1}</span><span>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {relatedTheme && (
+                    <div className="px-3 py-1 bg-slate-50 border-t border-slate-100 text-xs text-slate-400">Theme: {relatedTheme.label}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Tasks section ── */
+    function SectionTasks({ tasks, updTask, updOpp, opportunities, removeTask }) {
+      const TASK_STATUS_OPTIONS = ["Not Started","In Progress","Complete","Blocked"];
+      const VERDICT_OPTIONS = ["","Continue","Amplify","Adjust","Pivot","Stop"];
+      const TASK_STATUS_COLORS = {
+        "Not Started":"bg-slate-100 text-slate-500",
+        "In Progress":"bg-blue-100 text-blue-700",
+        "Complete":"bg-green-100 text-green-700",
+        "Blocked":"bg-red-100 text-red-600",
+      };
+      const VERDICT_COLORS = {
+        Continue:"bg-green-100 text-green-700", Amplify:"bg-indigo-100 text-indigo-700",
+        Adjust:"bg-amber-100 text-amber-700", Pivot:"bg-orange-100 text-orange-700",
+        Stop:"bg-red-100 text-red-700",
+      };
+
+      const [activeTab, setActiveTab] = useState({});
+      const [draftFb, setDraftFb]     = useState({});
+
+      function getTab(id) { return activeTab[id] || "details"; }
+      function getDraft(id) {
+        if (draftFb[id]) return draftFb[id];
+        const task = tasks.find(t => t.id === id);
+        return task?.feedback || { notes:"", actualImpact:"", verdict:"" };
+      }
+      function setDraft(id, field, value) {
+        setDraftFb(prev => ({...prev, [id]: {...getDraft(id), [field]: value}}));
+      }
+      function submitFeedback(task) {
+        const fb = getDraft(task.id);
+        const today = new Date().toISOString().split("T")[0];
+        const impact = parseInt(fb.actualImpact);
+        updTask(task.id, "feedback", { ...fb, actualImpact: impact||null, submittedAt: today });
+        if (impact >= 1 && impact <= 10) updOpp(task.opportunityId, "impact", impact);
+        setDraftFb(prev => { const n={...prev}; delete n[task.id]; return n; });
+      }
+
+      const counts = TASK_STATUS_OPTIONS.reduce((acc,s) => ({ ...acc, [s]: tasks.filter(t=>t.status===s).length }), {});
+
+      if (tasks.length === 0) return null;
+
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-semibold text-slate-800">Tasks
+              <span className="text-sm font-normal text-slate-400 ml-2">{tasks.length} total</span>
+            </h2>
+            <div className="flex gap-1.5">
+              {TASK_STATUS_OPTIONS.map(s => counts[s] > 0 && (
+                <span key={s} className={`text-xs px-2.5 py-1 rounded-full font-medium ${TASK_STATUS_COLORS[s]}`}>{counts[s]} {s}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {tasks.map(task => {
+              const tab = getTab(task.id);
+              const fb  = getDraft(task.id);
+              const op  = opportunities.find(o => o.id === task.opportunityId);
+              const daysLeft = task.endDate ? Math.ceil((new Date(task.endDate) - new Date()) / 86400000) : null;
+              const overdue  = daysLeft !== null && daysLeft < 0 && task.status !== "Complete";
+              return (
+                <div key={task.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {/* Card header */}
+                  <div className="p-4 border-b border-slate-100">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-slate-800">{task.title}</h3>
+                        {op && <p className="text-xs text-slate-400 mt-0.5 leading-relaxed line-clamp-1">{op.description}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {task.feedback?.submittedAt && task.feedback.verdict && (
+                          <Badge label={task.feedback.verdict} colorClass={VERDICT_COLORS[task.feedback.verdict]||"bg-slate-100 text-slate-500"} />
+                        )}
+                        <button onClick={() => removeTask(task.id, task.opportunityId)}
+                          title="Remove task and return to prioritization board"
+                          className="text-slate-300 hover:text-red-500 hover:bg-red-50 rounded px-1.5 py-0.5 text-xs transition-colors">✕</button>
+                        <select value={task.status}
+                          onChange={e => updTask(task.id, "status", e.target.value)}
+                          className={`text-xs font-medium px-2 py-1 rounded-full cursor-pointer outline-none focus:ring-2 focus:ring-purple-300 border-0 ${TASK_STATUS_COLORS[task.status]}`}>
+                          {TASK_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                        <span className="font-medium">Progress</span>
+                        <span className="font-semibold text-slate-700">{task.progress}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" step="5" value={task.progress}
+                        onChange={e => {
+                          const p = parseInt(e.target.value);
+                          updTask(task.id, "progress", p);
+                          if (p === 100) updTask(task.id, "status", "Complete");
+                        }}
+                        className="w-full h-2 rounded-full appearance-none cursor-pointer accent-[#3D35C0] bg-slate-200" />
+                    </div>
+
+                    {/* Dates + owner */}
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                      <label className="flex items-center gap-1.5">
+                        Start
+                        <input type="date" value={task.startDate||""}
+                          onChange={e => updTask(task.id, "startDate", e.target.value)}
+                          className="border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-purple-300" />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        End
+                        <input type="date" value={task.endDate||""}
+                          onChange={e => updTask(task.id, "endDate", e.target.value)}
+                          className={`border rounded-md px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-purple-300 ${overdue ? "border-red-300 text-red-600" : "border-slate-200 text-slate-700"}`} />
+                      </label>
+                      {daysLeft !== null && task.status !== "Complete" && (
+                        <span className={`font-semibold ${overdue ? "text-red-500" : daysLeft <= 7 ? "text-amber-500" : "text-slate-400"}`}>
+                          {overdue ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
+                        </span>
+                      )}
+                      <label className="flex items-center gap-1.5">
+                        Owner
+                        <input type="text" value={task.owner||""} placeholder="—"
+                          onChange={e => updTask(task.id, "owner", e.target.value)}
+                          className="border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-purple-300 w-28" />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Sub-tabs */}
+                  <div className="flex border-b border-slate-100 px-4 bg-slate-50">
+                    {["details","feedback"].map(t => (
+                      <button key={t} onClick={() => setActiveTab(prev => ({...prev, [task.id]: t}))}
+                        className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                          tab===t ? "border-[#3D35C0] text-[#3D35C0] bg-white" : "border-transparent text-slate-400 hover:text-slate-600"
+                        }`}>
+                        {t==="feedback"
+                          ? (task.feedback?.submittedAt ? "Feedback ✓" : "Feedback")
+                          : "Details"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Details tab */}
+                  {tab==="details" && op && (
+                    <div className="p-4 bg-slate-50 grid grid-cols-2 gap-5">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Success Metrics</p>
+                        <ul className="space-y-1.5">
+                          {op.successMetrics?.map((m,i) => (
+                            <li key={i} className="text-xs text-slate-600 flex gap-1.5"><span className="text-green-400 flex-shrink-0 mt-0.5">✓</span>{m}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">RICE at Approval</p>
+                        <div className="flex gap-4 text-xs text-slate-600 mb-2">
+                          <span>Reach <strong>{op.reach}</strong></span>
+                          <span>Impact <strong>{op.impact}</strong></span>
+                          <span>Conf <strong>{op.confidence}</strong></span>
+                          <span>Effort <strong>{op.effort}</strong></span>
+                        </div>
+                        <p className="text-xs text-slate-400">Score: <strong className="text-[#3D35C0] text-sm">{Math.round((op.reach*op.impact*op.confidence)/op.effort)}</strong></p>
+                        {op.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-3">
+                            {op.tags.map((tg,i) => <span key={i} className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{tg}</span>)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Feedback tab */}
+                  {tab==="feedback" && (
+                    <div className="p-4 space-y-4">
+                      {task.feedback?.submittedAt && (
+                        <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                          <span>✓</span>
+                          <span>Submitted {task.feedback.submittedAt} — Impact score updated in Prioritization Matrix</span>
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Outcome Notes</label>
+                        <textarea rows={3} value={fb.notes||""}
+                          onChange={e => setDraft(task.id, "notes", e.target.value)}
+                          placeholder="What happened? What worked, what didn't? What surprised you?"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-purple-300 resize-none" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Actual Impact (1–10)</label>
+                          <div className="flex items-center gap-2">
+                            <input type="number" min="1" max="10" value={fb.actualImpact||""}
+                              onChange={e => setDraft(task.id, "actualImpact", e.target.value)}
+                              placeholder="—"
+                              className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-sm font-bold text-center text-[#3D35C0] outline-none focus:ring-2 focus:ring-purple-300" />
+                            <span className="text-xs text-slate-400 leading-tight">Updates RICE<br/>Impact score</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Verdict</label>
+                          <select value={fb.verdict||""}
+                            onChange={e => setDraft(task.id, "verdict", e.target.value)}
+                            className="border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-purple-300 w-full">
+                            {VERDICT_OPTIONS.map(v => <option key={v} value={v}>{v||"Select verdict…"}</option>)}
+                          </select>
+                          <p className="text-xs text-slate-400 mt-1">Continue · Amplify · Adjust · Pivot · Stop</p>
+                        </div>
+                      </div>
+                      <button onClick={() => submitFeedback(task)}
+                        disabled={!fb.notes && !fb.actualImpact}
+                        className="px-4 py-2 bg-[#3D35C0] text-white text-xs font-semibold rounded-lg hover:bg-[#2A2490] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        Submit Feedback → Update Prioritization
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Prioritization Matrix section ── */
+    function SectionMatrix({ opportunities, stakeholders, themes, updOpp, tasks, addTask, removeTask }) {
+      const [filterHorizon, setFilterHorizon] = useState("All");
+      const [openId, setOpenId] = useState(null);
+
+      function rice(op) { return Math.round((op.reach * op.impact * op.confidence) / op.effort); }
+
+      const HORIZONS = ["All","Now","Next","Later"];
+      const STATUS_COLORS = {
+        "Candidate":"bg-slate-100 text-slate-500","Under Evaluation":"bg-amber-100 text-amber-700",
+        "Approved":"bg-green-100 text-green-700","Rejected":"bg-red-100 text-red-500",
+        "In Progress":"bg-blue-100 text-blue-700","Delivered":"bg-indigo-100 text-indigo-700"
+      };
+      const HORIZON_COLORS = { "Now":"bg-green-100 text-green-700","Next":"bg-blue-100 text-blue-700","Later":"bg-slate-100 text-slate-500" };
+      const EFFORT_COLORS  = { "S":"bg-green-100 text-green-700","M":"bg-yellow-100 text-yellow-700","L":"bg-orange-100 text-orange-700","XL":"bg-red-100 text-red-700" };
+
+      const filtered = opportunities
+        .filter(op => filterHorizon==="All" || op.horizon===filterHorizon)
+        .sort((a,b) => rice(b)-rice(a));
+
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Opportunity Prioritization
+                <span className="text-sm font-normal text-slate-400 ml-2">{filtered.length} opportunities · RICE scoring</span>
+              </h2>
+            </div>
+            <div className="flex items-center gap-1">
+              {HORIZONS.map(h => (
+                <button key={h} onClick={() => setFilterHorizon(h)}
+                  className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
+                    filterHorizon===h ? "bg-[#3D35C0] text-white border-[#3D35C0]" : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                  }`}>{h}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 mb-5 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <span className="font-mono font-semibold text-slate-700">RICE = (Reach × Impact × Confidence) ÷ Effort</span>
+            <span className="text-slate-300">·</span>
+            <span>All dimensions 1–10 · Higher score = higher priority · Effort is inverted</span>
+          </div>
+
+          {filtered.length > 0 && (
+            <div className="space-y-3">
+              {filtered.map((op, idx) => {
+                const score = rice(op);
+                const isOpen = openId===op.id;
+                const relThemes = themes.filter(t => op.themeIds?.includes(t.id));
+                return (
+                  <div key={op.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white hover:border-slate-300 transition-colors">
+                    <div className="flex items-start gap-4 p-4 cursor-pointer" onClick={() => setOpenId(isOpen?null:op.id)}>
+                      <div className="flex-shrink-0 text-center w-14 pt-1">
+                        <div className="text-2xl font-bold text-[#3D35C0] leading-none">{score}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">RICE</div>
+                        <div className="text-xs text-slate-300 mt-1">#{idx+1}</div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <h3 className="font-semibold text-slate-800 text-sm">{op.title}</h3>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed mb-2">{op.description}</p>
+                        <div className="flex items-center gap-4 text-xs text-slate-400">
+                          <span>Reach <span className="font-semibold text-slate-600">{op.reach}</span></span>
+                          <span>Impact <span className="font-semibold text-slate-600">{op.impact}</span></span>
+                          <span>Confidence <span className="font-semibold text-slate-600">{op.confidence}</span></span>
+                          <span>Effort <span className="font-semibold text-slate-600">{op.effort}</span></span>
+                        </div>
+                        {relThemes.length>0 && (
+                          <div className="flex gap-1 mt-2">
+                            {relThemes.map(t => <span key={t.id} className="text-xs bg-purple-50 text-[#3D35C0] px-1.5 py-0.5 rounded">{t.label}</span>)}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-300 flex-shrink-0 mt-1">{isOpen?"▲":"▼"}</span>
+                    </div>
+                    {isOpen && (
+                      <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-4">
+                        {/* Editable title + description */}
+                        <div className="pb-3 border-b border-slate-200">
+                          <input type="text" value={op.title}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => { e.stopPropagation(); updOpp(op.id, "title", e.target.value); }}
+                            className="w-full text-sm font-semibold text-slate-800 border border-slate-200 rounded-lg px-3 py-2 mb-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                          <textarea value={op.description}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => { e.stopPropagation(); updOpp(op.id, "description", e.target.value); }}
+                            rows={2}
+                            className="w-full text-xs text-slate-600 border border-slate-200 rounded-lg px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                          {op.successMetrics?.length>0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Success Metrics</p>
+                              <ul className="space-y-1">
+                                {op.successMetrics.map((m,i) => <li key={i} className="text-xs text-slate-600 flex gap-1.5"><span className="text-green-400 flex-shrink-0">✓</span>{m}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {op.antiUseCases?.length>0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Anti-Use-Cases</p>
+                              <ul className="space-y-1">
+                                {op.antiUseCases.map((a,i) => <li key={i} className="text-xs text-slate-500 flex gap-1.5"><span className="text-red-300 flex-shrink-0">✕</span>{a}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {op.notes && (
+                            <div>
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Notes</p>
+                              <p className="text-xs text-slate-500 italic leading-relaxed">{op.notes}</p>
+                            </div>
+                          )}
+                        </div>
+                        {/* RICE score editor + Move to Tasks */}
+                        <div className="border-t border-slate-200 pt-4 flex items-end justify-between gap-6 flex-wrap">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Adjust RICE Scores</p>
+                            <div className="flex items-center gap-3">
+                              {[["reach","Reach"],["impact","Impact"],["confidence","Conf"],["effort","Effort"]].map(([field,label]) => (
+                                <div key={field} className="text-center">
+                                  <label className="text-xs text-slate-400 block mb-1">{label}</label>
+                                  <input type="number" min="1" max="10" value={op[field]}
+                                    onClick={e => e.stopPropagation()}
+                                    onChange={e => { e.stopPropagation(); updOpp(op.id, field, Math.min(10, Math.max(1, parseInt(e.target.value)||1))); }}
+                                    className="w-14 text-center border border-slate-200 rounded-lg py-1.5 text-sm font-bold text-slate-700 bg-white outline-none focus:ring-2 focus:ring-purple-300" />
+                                </div>
+                              ))}
+                              <div className="text-center">
+                                <label className="text-xs text-slate-400 block mb-1">RICE</label>
+                                <div className="w-14 text-center py-1.5 text-sm font-bold text-[#3D35C0] bg-purple-50 border border-purple-200 rounded-lg">{score}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 flex items-center gap-2">
+                            {tasks.find(t => t.opportunityId===op.id) ? (
+                              <>
+                                <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg font-medium">In Tasks ✓</span>
+                                <button onClick={e => { e.stopPropagation(); removeTask("task-"+op.id, op.id); }}
+                                  className="text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-3 py-1.5 rounded-lg transition-colors">
+                                  ← Back to Board
+                                </button>
+                              </>
+                            ) : (
+                              <button onClick={e => { e.stopPropagation(); addTask(op); }}
+                                className="text-xs bg-[#3D35C0] hover:bg-[#2A2490] text-white px-4 py-2 rounded-lg font-semibold transition-colors">
+                                Move to Tasks →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Results section ── */
+    function SectionResults({ results, tasks, opportunities }) {
+      const [view, setView] = useState("roadmap");
+
+      const decisions = results.filter(r => r.type==="decision");
+      const outcomes  = results.filter(r => r.type==="outcome");
+
+      function rice(op) { return Math.round((op.reach * op.impact * op.confidence) / op.effort); }
+      const sortedOps = [...(opportunities||[])].sort((a,b) => rice(b)-rice(a));
+      const nowOps    = sortedOps.filter(op => op.horizon==="Now");
+      const nextOps   = sortedOps.filter(op => op.horizon==="Next");
+      const laterOps  = sortedOps.filter(op => op.horizon==="Later");
+
+      const STATUS_DOT = { "Candidate":"bg-slate-300","Under Evaluation":"bg-amber-400","Approved":"bg-green-500","In Progress":"bg-blue-500","Delivered":"bg-indigo-500","Rejected":"bg-red-400" };
+      const DEC_STATUS = { "Open":"bg-amber-100 text-amber-700","In Progress":"bg-blue-100 text-blue-700","Done":"bg-green-100 text-green-700" };
+
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-semibold text-slate-800">Results</h2>
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+              {[["roadmap","Roadmap"],["decisions","Decisions"],["outcomes","Outcomes"]].map(([id,label]) => (
+                <button key={id} onClick={() => setView(id)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    view===id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  }`}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {view==="roadmap" && (
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                ["Now",   nowOps,   "border-green-200","bg-green-50","text-green-700"],
+                ["Next",  nextOps,  "border-blue-200", "bg-blue-50", "text-blue-700"],
+                ["Later", laterOps, "border-slate-200","bg-slate-50","text-slate-600"],
+              ].map(([label,ops,border,bg,text]) => (
+                <div key={label}>
+                  <div className={"rounded-xl border p-4 "+border+" "+bg}>
+                    <h3 className={"text-sm font-bold mb-3 "+text}>{label}</h3>
+                    <div className="space-y-2">
+                      {ops.map((op,idx) => (
+                        <div key={op.id} className="bg-white border border-slate-200 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs font-bold text-slate-300 flex-shrink-0 mt-0.5 w-4">#{idx+1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-1">
+                                <p className="text-xs font-semibold text-slate-800 leading-snug">{op.title}</p>
+                                <span className="text-xs font-bold text-[#3D35C0] flex-shrink-0">{rice(op)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <div className={"w-1.5 h-1.5 rounded-full flex-shrink-0 "+(STATUS_DOT[op.status]||"bg-slate-300")} />
+                                <span className="text-xs text-slate-400">{op.status}</span>
+                                <span className="text-xs text-slate-300">·</span>
+                                <span className="text-xs text-slate-400">Effort {effortToLabel(op.effort)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {ops.length === 0 && <p className="text-xs text-slate-300 italic">No opportunities</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {view==="decisions" && (
+            <div className="space-y-3">
+              {decisions.map(d => (
+                  <div key={d.id} className="border border-slate-200 rounded-xl p-4 bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-800 text-sm">{d.title}</p>
+                        {d.rationale && <p className="text-xs text-slate-500 mt-1 leading-relaxed">{d.rationale}</p>}
+                        <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                          {d.date && <span>{d.date}</span>}
+                          {d.owner && <span>· {d.owner}</span>}
+                        </div>
+                      </div>
+                      <Badge label={d.status} colorClass={DEC_STATUS[d.status]||"bg-slate-100 text-slate-500"} />
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {view==="outcomes" && (
+            <div className="space-y-6">
+              {outcomes.length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Metric</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Baseline</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Target</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Actual</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Owner</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {outcomes.map(o => (
+                        <tr key={o.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 font-medium text-slate-700">{o.title}</td>
+                          <td className="px-4 py-3 text-slate-500">{o.baseline||"—"}</td>
+                          <td className="px-4 py-3 text-green-600 font-medium">{o.target||"—"}</td>
+                          <td className="px-4 py-3">
+                            {o.actual
+                              ? <span className="font-semibold text-[#3D35C0]">{o.actual}</span>
+                              : <span className="text-slate-300 italic">pending</span>
+                            }
+                          </td>
+                          <td className="px-4 py-3 text-slate-400">{o.owner||"—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Task feedback scores */}
+              {tasks.filter(t => t.feedback?.submittedAt).length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Feedback from Tasks</h3>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Task</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Actual Impact</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Verdict</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Date</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-slate-500 uppercase tracking-wide">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {tasks.filter(t => t.feedback?.submittedAt).map(task => {
+                          const VERDICT_COLORS = { Continue:"bg-green-100 text-green-700", Amplify:"bg-indigo-100 text-indigo-700", Adjust:"bg-amber-100 text-amber-700", Pivot:"bg-orange-100 text-orange-700", Stop:"bg-red-100 text-red-700" };
+                          return (
+                            <tr key={task.id} className="hover:bg-slate-50">
+                              <td className="px-4 py-3 font-medium text-slate-700">{task.title}</td>
+                              <td className="px-4 py-3"><Badge label={task.status} colorClass={{"Not Started":"bg-slate-100 text-slate-500","In Progress":"bg-blue-100 text-blue-700","Complete":"bg-green-100 text-green-700","Blocked":"bg-red-100 text-red-600"}[task.status]||"bg-slate-100 text-slate-500"} /></td>
+                              <td className="px-4 py-3">
+                                {task.feedback.actualImpact
+                                  ? <span className="font-bold text-[#3D35C0] text-sm">{task.feedback.actualImpact}<span className="text-slate-400 font-normal text-xs">/10</span></span>
+                                  : <span className="text-slate-300 italic">not set</span>
+                                }
+                              </td>
+                              <td className="px-4 py-3">
+                                {task.feedback.verdict
+                                  ? <Badge label={task.feedback.verdict} colorClass={VERDICT_COLORS[task.feedback.verdict]||"bg-slate-100 text-slate-500"} />
+                                  : <span className="text-slate-300">—</span>
+                                }
+                              </td>
+                              <td className="px-4 py-3 text-slate-400">{task.feedback.submittedAt}</td>
+                              <td className="px-4 py-3 text-slate-500 max-w-xs truncate" title={task.feedback.notes}>{task.feedback.notes||"—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Matrix compact table — used only in PrintView ── */
+    function MatrixPrintTable({ opportunities, themes, tasks }) {
+      function rice(op) { return Math.round((op.reach * op.impact * op.confidence) / op.effort); }
+      const HORIZON_COLORS = { "Now":"bg-green-100 text-green-700","Next":"bg-blue-100 text-blue-700","Later":"bg-slate-100 text-slate-500" };
+      const EFFORT_COLORS  = { "S":"bg-green-100 text-green-700","M":"bg-yellow-100 text-yellow-700","L":"bg-orange-100 text-orange-700","XL":"bg-red-100 text-red-700" };
+      const STATUS_COLORS  = { "Candidate":"bg-slate-100 text-slate-500","Under Evaluation":"bg-amber-100 text-amber-700","Approved":"bg-green-100 text-green-700","In Progress":"bg-blue-100 text-blue-700","Delivered":"bg-indigo-100 text-indigo-700","Rejected":"bg-red-100 text-red-500" };
+      const sorted = [...opportunities].sort((a,b) => rice(b)-rice(a));
+      return (
+        <div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.7rem"}}>
+            <thead>
+              <tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                <th style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600,width:"2rem"}}>#</th>
+                <th style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>Opportunity</th>
+                <th style={{padding:"6px 8px",textAlign:"center",color:"#64748b",fontWeight:600,width:"3.5rem"}}>RICE</th>
+                <th style={{padding:"6px 8px",textAlign:"center",color:"#64748b",fontWeight:600,width:"3.5rem"}}>Horizon</th>
+                <th style={{padding:"6px 8px",textAlign:"center",color:"#64748b",fontWeight:600,width:"3rem"}}>Effort</th>
+                <th style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600,width:"6rem"}}>Status</th>
+                <th style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>Themes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((op, idx) => {
+                const score = rice(op);
+                const relThemes = themes.filter(t => op.themeIds?.includes(t.id));
+                const inTasks = tasks.some(t => t.opportunityId===op.id);
+                return (
+                  <tr key={op.id} style={{borderBottom:"1px solid #f1f5f9",background: idx%2===0?"white":"#fafafa"}}>
+                    <td style={{padding:"5px 8px",color:"#94a3b8",textAlign:"center"}}>{idx+1}</td>
+                    <td style={{padding:"5px 8px"}}>
+                      <div style={{fontWeight:600,color:"#1e293b",marginBottom:"1px"}}>{op.title}</div>
+                      {op.description && <div style={{color:"#94a3b8",fontSize:"0.65rem",lineHeight:1.3}}>{op.description}</div>}
+                    </td>
+                    <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,color:"#3D35C0",fontSize:"0.85rem"}}>{score}</td>
+                    <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={op.horizon} colorClass={HORIZON_COLORS[op.horizon]||"bg-slate-100 text-slate-500"} /></td>
+                    <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={effortToLabel(op.effort)} colorClass={EFFORT_COLORS[effortToLabel(op.effort)]||"bg-slate-100 text-slate-500"} /></td>
+                    <td style={{padding:"5px 8px"}}>
+                      <div className="flex items-center gap-1">
+                        <Badge label={op.status} colorClass={STATUS_COLORS[op.status]||"bg-slate-100 text-slate-500"} />
+                        {inTasks && <span style={{fontSize:"0.6rem",color:"#16a34a"}}>✓</span>}
+                      </div>
+                    </td>
+                    <td style={{padding:"5px 8px"}}>
+                      <div className="flex flex-wrap gap-0.5">
+                        {relThemes.map(t => <span key={t.id} style={{fontSize:"0.6rem",background:"#f5f3ff",color:"#3D35C0",padding:"1px 5px",borderRadius:"3px"}}>{t.label}</span>)}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    /* ── Print View — all sections stacked for PDF export ── */
+    function PrintView({ stakeholders, interviews, themes, insights, opportunities,
+                         results, tasks, sectionLabels, newNote, colConfig }) {
+      const noop = () => {};
+      const completedCount = interviews.filter(i => i.status === "Complete").length;
+      const today = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+      const allSections = [
+        { key:"stakeholders", show: stakeholders.length > 0,
+          el:<SectionStakeholders stakeholders={stakeholders} interviews={interviews}
+              newNote={newNote} setNewNote={noop} updS={noop} delS={noop}
+              done={completedCount} colConfig={colConfig} setColConfig={noop} /> },
+        { key:"highlights",   show: themes.length > 0,
+          el:<SectionHighlights themes={themes} stakeholders={stakeholders} /> },
+        { key:"insights",     show: insights.length > 0,
+          el:<SectionInsights insights={insights} themes={themes} stakeholders={stakeholders} /> },
+        { key:"matrix",       show: opportunities.length > 0,
+          el:<MatrixPrintTable opportunities={opportunities} themes={themes} tasks={tasks} /> },
+        { key:"status",       show: tasks.length > 0,
+          el:<SectionTasks tasks={tasks} updTask={noop} updOpp={noop} opportunities={opportunities} removeTask={noop} /> },
+      ].filter(s => s.show);
+      return (
+        <div className="print-only font-sans">
+          {allSections.map((s, i) => (
+            <div key={s.key} className={i > 0 ? "print-section" : ""} style={{paddingBottom:"1.5rem"}}>
+              <div style={{borderBottom:"2px solid #3D35C0",marginBottom:"1rem",paddingBottom:"0.4rem",display:"flex",alignItems:"baseline",justifyContent:"space-between"}}>
+                <span style={{fontWeight:700,fontSize:"1rem",color:"#3D35C0"}}>{sectionLabels[s.key]}</span>
+                {i === 0
+                  ? <span style={{fontSize:"0.65rem",color:"#94a3b8"}}>{today} · Seclore · Customer Success · AI Enablement</span>
+                  : <span style={{fontSize:"0.65rem",color:"#94a3b8"}}>Seclore · Customer Success · AI Enablement</span>
+                }
+              </div>
+              {s.el}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ════════════════════════════════════════════════
+       APP — only state, layout, and routing here
+    ════════════════════════════════════════════════ */
+    function App() {
+      const saved = loadState();
+
+      const [tab, setTab]               = useState(saved?.tab           || "stakeholders");
+      const [stakeholders, setS]        = useState(saved?.stakeholders  || INIT_STAKEHOLDERS);
+      const [interviews, setI]          = useState(saved?.interviews    || INIT_INTERVIEWS);
+      const [themes, setThemes]         = useState(saved?.themes        || INIT_THEMES);
+      const [insights, setInsights]     = useState(saved?.insights      || INIT_INSIGHTS);
+      const [opportunities, setOpp]     = useState(saved?.opportunities || INIT_OPPORTUNITIES);
+      const [results, setResults]       = useState(saved?.results       || INIT_RESULTS);
+      const [tasks, setTasks]           = useState(saved?.tasks         || INIT_TASKS);
+      const [newNote, setNewNote]       = useState(saved?.newNote       || {});
+      const [sectionLabels, setSL]      = useState(saved?.sectionLabels || INIT_SECTION_LABELS);
+      const [colConfig, setColConfig]   = useState(saved?.colConfig     || DEFAULT_COL_CONFIG);
+      const [editingTab, setEditingTab] = useState(null);
+      const [editTabVal, setEditTabVal] = useState("");
+      const [deletedIds, setDeletedIds] = useState(saved?.deletedIds || []);
+
+      useEffect(() => {
+        saveState({ tab, stakeholders, interviews, themes, insights, opportunities, results, tasks, newNote, sectionLabels, colConfig, deletedIds });
+      }, [tab, stakeholders, interviews, themes, insights, opportunities, results, tasks, newNote, sectionLabels, colConfig, deletedIds]);
+
+      useEffect(() => {
+        loadIDB().then(s => {
+          if (!s) return;
+          const del = s.deletedIds || [];
+          const m = { ...s,
+            stakeholders:  mergeById(INIT_STAKEHOLDERS,  s.stakeholders).filter(x => !del.includes(x.id)),
+            interviews:    mergeById(INIT_INTERVIEWS,    s.interviews),
+            themes:        mergeById(INIT_THEMES,        s.themes),
+            insights:      mergeById(INIT_INSIGHTS,      s.insights),
+            opportunities: mergeById(INIT_OPPORTUNITIES, s.opportunities),
+            results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
+            tasks:         s.tasks || [],
+            deletedIds:    del,
+          };
+          setTab(m.tab || "stakeholders");
+          setS(m.stakeholders); setI(m.interviews); setThemes(m.themes);
+          setInsights(m.insights); setOpp(m.opportunities); setResults(m.results);
+          setTasks(m.tasks); setNewNote(m.newNote || {});
+          setSL(m.sectionLabels || INIT_SECTION_LABELS);
+          setColConfig(m.colConfig || DEFAULT_COL_CONFIG);
+          setDeletedIds(del);
+        });
+      }, []);
+
+      const done = stakeholders.filter(s => s.status === "Complete").length;
+      const priorityTargets = 9;
+
+      function updS(id, f, v)  { setS(prev => prev.map(s => s.id===id ? {...s, [f]:v} : s)); }
+      function delS(id)        {
+        setS(prev => prev.filter(s => s.id !== id));
+        setDeletedIds(prev => prev.includes(id) ? prev : [...prev, id]);
+      }
+      function updOpp(id, f, v){ setOpp(prev => prev.map(o => o.id===id ? {...o, [f]:v} : o)); }
+      function updTask(id, f, v){ setTasks(prev => prev.map(t => t.id===id ? {...t, [f]:v} : t)); }
+      function removeTask(taskId, opportunityId) {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        updOpp(opportunityId, "status", "Candidate");
+      }
+      function addTask(op) {
+        const taskId = "task-" + op.id;
+        if (tasks.find(t => t.id === taskId)) { setTab("status"); return; }
+        setTasks(prev => [...prev, {
+          id: taskId, opportunityId: op.id, title: op.title,
+          status: "Not Started", progress: 0,
+          startDate: "", endDate: "", owner: "",
+          feedback: { notes:"", actualImpact:null, verdict:"", submittedAt:null }
+        }]);
+        updOpp(op.id, "status", "In Progress");
+        setTab("status");
+      }
+
+      function resetAll() {
+        if (window.confirm("Reset all data to defaults? This cannot be undone.")) {
+          localStorage.removeItem(STORAGE_KEY);
+          window.location.reload();
+        }
+      }
+
+      const SECTIONS = [
+        {id:"stakeholders"}, {id:"highlights"}, {id:"insights"},
+        {id:"matrix"}, {id:"status"}, {id:"results"},
+      ];
+
+      const content = {
+        stakeholders: <SectionStakeholders stakeholders={stakeholders} interviews={interviews}
+                        newNote={newNote} setNewNote={setNewNote} updS={updS} delS={delS}
+                        done={done} colConfig={colConfig} setColConfig={setColConfig} />,
+        highlights:   <SectionHighlights themes={themes} stakeholders={stakeholders} />,
+        insights:     <SectionInsights insights={insights} themes={themes} stakeholders={stakeholders} />,
+        matrix:       <SectionMatrix opportunities={opportunities} stakeholders={stakeholders} themes={themes}
+                        updOpp={updOpp} tasks={tasks} addTask={addTask} removeTask={removeTask} />,
+        status:       <SectionTasks tasks={tasks} updTask={updTask} updOpp={updOpp} opportunities={opportunities} removeTask={removeTask} />,
+        results:      (
+          <div className="flex flex-col items-center justify-center py-32 text-center">
+            <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center mb-4">
+              <span className="text-slate-300 text-lg">&#9685;</span>
+            </div>
+            <p className="text-slate-500 font-medium text-sm">Results loading</p>
+            <p className="text-slate-400 text-xs mt-1 max-w-xs">This section will track metrics, outcomes, and impact once initiatives are underway.</p>
+          </div>
+        ),
+      };
+
+      return (
+        <div className="min-h-screen bg-slate-100 font-sans">
+          <div className="px-6 py-5 shadow-md" style={{background:"linear-gradient(135deg, #1E1A7E 0%, #3D35C0 55%, #5247CF 100%)"}}>
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div>
+                <h1 className="text-2xl font-bold text-white tracking-tight"><span className="font-black">SECLORE</span> — Customer Success — AI Enablement</h1>
+                <p className="text-purple-200 text-sm mt-0.5">Customer Success · AI Enablement · PM: Tarun</p>
+              </div>
+              <div className="flex items-center gap-5 no-print">
+                <div className="flex gap-3">
+                  {[{val:stakeholders.length,label:"Stakeholders"},{val:done,label:"Interviewed"},{val:interviews.length,label:"Sources"}].map(({val,label})=>(
+                    <div key={label} className="text-center px-4 py-2 rounded-xl" style={{background:"rgba(255,255,255,0.15)"}}>
+                      <div className="text-white font-bold text-xl leading-none">{val}</div>
+                      <div className="text-purple-200 text-xs mt-1">{label}</div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => window.print()}
+                  className="text-sm font-semibold text-white border border-white/30 hover:bg-white/20 rounded-lg px-4 py-2 transition-colors" style={{background:"rgba(255,255,255,0.12)"}}>
+                  Export PDF ↓
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border-b border-slate-200 px-6 overflow-x-auto no-print shadow-sm">
+            <div className="flex gap-0 min-w-max max-w-7xl mx-auto">
+              {SECTIONS.map(t => (
+                <button key={t.id} onClick={() => { if (editingTab !== t.id) setTab(t.id); }}
+                  className={`group px-5 py-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
+                    tab===t.id ? "border-[#3D35C0] text-[#3D35C0] font-semibold" : "font-medium border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                  }`}>
+                  {editingTab===t.id ? (
+                    <input autoFocus value={editTabVal}
+                      onChange={e => setEditTabVal(e.target.value)}
+                      onBlur={() => { setSL(p => ({...p, [t.id]: editTabVal||p[t.id]})); setEditingTab(null); }}
+                      onKeyDown={e => { if (e.key==="Enter") e.target.blur(); if (e.key==="Escape") setEditingTab(null); }}
+                      onClick={e => e.stopPropagation()}
+                      className="bg-transparent border-b border-[#3D35C0] outline-none text-[#3D35C0] w-36 text-sm font-medium" />
+                  ) : (
+                    <span className="flex items-center gap-1"
+                      onDoubleClick={e => { e.stopPropagation(); setEditingTab(t.id); setEditTabVal(sectionLabels[t.id]); }}
+                      title="Double-click to rename">
+                      {sectionLabels[t.id]}
+                      <span className="text-slate-300 opacity-0 group-hover:opacity-100 text-xs transition-opacity">✎</span>
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6 max-w-7xl mx-auto no-print">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-md p-7">
+              {content[tab]}
+            </div>
+          </div>
+
+          <footer className="text-center py-4 text-xs text-slate-400 mt-1 no-print">
+            {new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})} · AI Enablement
+          </footer>
+
+          <PrintView stakeholders={stakeholders} interviews={interviews} themes={themes}
+            insights={insights} opportunities={opportunities} results={results} tasks={tasks}
+            sectionLabels={sectionLabels} newNote={newNote} colConfig={colConfig} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
