@@ -154,6 +154,7 @@
       { id:"s16", name:"Colton",                    role:"Account Executive",           poc:"Colton",                     team:"Sales",            tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"New to the system but highly self-aware about pain. Loves storytelling, dislikes evangelizing. Proactively offered to co-build BDR call scripts. Strong signal for sales enablement and pre-call research automation." },
       { id:"s17", name:"Jitu",                       role:"Senior CSM",                 poc:"Jitu",                       team:"Customer Success", tier:1, segment:"Champion",   influence:"High", pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"Walked through full CSM lifecycle from handover to renewal. Core pain: no intelligence assist for usecase selection, no ready-made evangelism narrative. Hidden dep: his Statisfy health view depends on PM update discipline. Strong signal for Product Story Engine and Usecase Intelligence." },
       { id:"s18", name:"Zach",                        role:"Account Executive",           poc:"Zach",                       team:"Sales",            tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"Late AI adopter now using it daily for outreach, research, and follow-up. Former BDR manager (5+ yrs, 25-person team) — deep understanding of prospect personas and org-size/security role dynamics. Key pain: finding the right DLP/DSPM-responsible contact at target companies (title ≠ responsibility), ZoomInfo not renewed (critical gap), Salesforce full of historical DRM leads that may now be ARMOR/DSPM opportunities. Uses ChatGPT for company research, LinkedIn for people. Second AE source confirming pre-call research and product knowledge gaps." },
+      { id:"s19", name:"Paresh",                      role:"Product Manager (US)",        poc:"Paresh",                     team:"PM / Delivery",    tier:2, segment:"Champion",   influence:"Med",  pain:"High", status:"Complete",    schedulingStatus:"Complete",    notes:"Only PM for the US region, managing 10–15 customer projects. Identified 4 high-frequency manual activities: weekly customer status PPT, Salesforce Chatter updates, monthly global dashboard collation (all 9 PMs), and MOM review. Active AI user — ChatGPT for emails/prompts, Claude for PPTs (steering committee decks). Running AI-assisted document revision project (June deadline). Building Smartsheet→Statisfy→Salesforce integration POC with Deva. Wants Smartsheet as single source of truth feeding Power BI and weekly status. Statisfy demo (PM use case) pending Thursday." },
     ];
 
 
@@ -239,6 +240,26 @@
         ]
       },
       {
+        id: "iv6", stakeholderId: "s19", source: "transcript", date: "2026-05-11",
+        sentiment: 1, urgency: 4,
+        summary: "Paresh Verma — PM, US region. Manages 10–15 customer projects solo. Walked through four weekly/monthly recurring activities that consume disproportionate PM time: (1) weekly customer status PPT per account, (2) Salesforce Chatter internal update, (3) monthly global dashboard collated from all 9 PMs for Vishal Ghori, (4) MOM review from Statisfy/Seclore note taker. No centralized risk tracker — risks live in Excel per PM per project. Active AI user: ChatGPT for email writing + Gamma PPT prompts, Claude for steering committee decks. POC by Deva (Claude + Smartsheet API → Excel → Statisfy → Salesforce) is promising but early. Smartsheet has 5 years of project data and is PM source of truth — but no native connectors to Salesforce or Statisfy. Power BI already integrated with Smartsheet; dashboard pending Amit's approval. Explicit ask: help build a Smartsheet weekly dashboard to copy-paste into customer email.",
+        quotes: [
+          "We send a weekly status report to each customer — I have between 10 and 15. It's a standard format, same structure every week, just updated content.",
+          "We also do a Salesforce Chatter update for internal stakeholders — it's essentially the same information in a different place.",
+          "Every month, all PMs send me their project data. I collate it, make it look good, and send it to Vishal Ghori and all the CSMs. I've been doing it for two years.",
+          "The MOM comes from Statisfy or the Seclore note taker — I review it, modify it, and send it. Still manual but better than nothing.",
+          "My goal is Smartsheet as the single source of truth — feeding the Power BI dashboard, the global report, and eventually the weekly customer status."
+        ],
+        themes: ["PM Reporting & Status Automation", "Multi-platform Fragmentation", "Manual Repetitive High-Volume Work"],
+        frictionAreas: ["Weekly Status Reports", "Salesforce Chatter Updates", "Global PM Dashboard", "MOM Review", "Risk Tracking"],
+        actionItems: [
+          "Get contributor access to Smartsheet (Paresh to free up a license ~May 25)",
+          "Build Smartsheet weekly status dashboard for copy-paste into customer email",
+          "Explore Smartsheet → Statisfy connector options or Claude API bridge",
+          "Assist with AI-assisted document revision project (June deadline)"
+        ]
+      },
+      {
         id: "iv4", stakeholderId: "s17", source: "notes", date: "2026-05-06",
         sentiment: 1, urgency: 4,
         summary: "Jitu (Senior CSM) walked through the full CSM lifecycle via whiteboard: PS handover → Salesforce as data backbone → Kickoff → Usecase mapping (CSM-owned) → Project management (PM-owned) → Statisfy for health tracking (Relationship, Friction, Adoption, Cost Factors) → Stakeholder 1:1s and PS/CSM reviews. Core pain: no tooling to help select the right usecases for a customer org — CSM does this manually. No ready-made narrative or 'story to evangelize' with customers. Wants account/customer trend monitoring to adapt conversations dynamically. Interest in in-customer marketing (vague). Hidden insight: Statisfy data quality depends on PM discipline, not CSM input — creating a gap in Jitu's health view.",
@@ -261,21 +282,24 @@
     const INIT_THEMES = [
       {
         id: "t1", label: "Multi-platform Fragmentation",
-        summary: "Data scattered across Salesforce, Excel, SharePoint, Teams, Statisfy, FreshDesk, ProTrack, and ZoomInfo — forcing manual multi-platform entry and creating single-source-of-truth gaps across CS, Delivery, and Sales.",
-        frequency: 3, status: "Confirmed", stakeholderIds: ["s2","s7","s16"],
+        summary: "Data scattered across Salesforce, Excel, SharePoint, Teams, Statisfy, FreshDesk, ProTrack, Smartsheet, and ZoomInfo — forcing manual multi-platform entry and creating single-source-of-truth gaps across CS, Delivery, Sales, and PM. Smartsheet (PM source of truth) has no native connector to Salesforce or Statisfy. Monthly global dashboard is collated manually because no integration exists.",
+        frequency: 4, status: "Confirmed", stakeholderIds: ["s2","s7","s16","s19"],
         quotes: [
           "It's three different transactions that one is doing as busy work — and one of these platforms may be left out.",
           "No integration exists between FreshDesk (support) and ProTrack (implementation).",
-          "Tools like ZoomInfo and Salesforce exist but aren't synthesized — you still have to do the research yourself."
+          "Tools like ZoomInfo and Salesforce exist but aren't synthesized — you still have to do the research yourself.",
+          "My goal is Smartsheet as the single source of truth — feeding the Power BI dashboard, the global report, and eventually the weekly customer status."
         ]
       },
       {
         id: "t2", label: "Manual Repetitive High-Volume Work",
-        summary: "High-frequency, low-value manual tasks dominate workflows: 300+ renewal proposals/year, 4-day health check reports per customer, manual version field updates per upgrade cycle in ProTrack.",
-        frequency: 2, status: "Confirmed", stakeholderIds: ["s2","s7"],
+        summary: "High-frequency, low-value manual tasks dominate workflows across CS, Delivery, and PM: 300+ renewal proposals/year, 4-day health check reports per customer, ProTrack version field updates per upgrade, and weekly/monthly PM reporting (status PPTs per customer, Chatter updates, global dashboard collation, MOM review) across 9 PMs managing 10–15 accounts each.",
+        frequency: 3, status: "Confirmed", stakeholderIds: ["s2","s7","s19"],
         quotes: [
           "It doesn't take more than 10 minutes to create a renewal proposal, but the volumes are 300+ per year and there are iterations.",
-          "I really hated updating each component version field manually in ProTrack."
+          "I really hated updating each component version field manually in ProTrack.",
+          "We send a weekly status report to each customer — I have between 10 and 15. It's a standard format, same structure every week, just updated content.",
+          "Every month, all PMs send me their project data. I collate it, make it look good, and send it to Vishal Ghori and all the CSMs. I've been doing it for two years."
         ]
       },
       {
@@ -358,11 +382,21 @@
           "Is there a chance to go back and use AI in our Salesforce to run a search of keywords — look at the notes and determine which ones are most likely to buy?",
           "If it wasn't a DRM opportunity at the time, we would not have continued to work that lead. But now with ARMOR and DSPM — there's a chance to go back."
         ]
+      },
+      {
+        id: "t12", label: "PM Reporting & Status Automation Gap",
+        summary: "PMs produce 4 recurring manual outputs per cycle: weekly customer status PPT (10–15 per PM), bi-weekly Salesforce Chatter updates, monthly global dashboard (collated from 9 PMs), and MOM review from note taker. All are templated and data-driven — ideal for automation — but none are connected to the Smartsheet data source that already holds the underlying project state.",
+        frequency: 1, status: "Emerging", stakeholderIds: ["s19"],
+        quotes: [
+          "We send a weekly status report to each customer — I have between 10 and 15. It's a standard format, same structure every week, just updated content.",
+          "Every month, all PMs send me their project data. I collate it, make it look good, and send it to Vishal Ghori and all the CSMs. I've been doing it for two years.",
+          "The MOM comes from Statisfy or the Seclore note taker — I review it, modify it, and send it. Still manual but better than nothing."
+        ]
       }
     ];
     const INIT_INSIGHTS = [
       {
-        id:"ps1", themeId:"t1", impact:"High", status:"Validated", stakeholderIds:["s2","s7"],
+        id:"ps1", themeId:"t1", impact:"High", status:"Validated", stakeholderIds:["s2","s7","s19"],
         hmw:"How might we give CS and Delivery teams a single source of truth that eliminates redundant multi-platform data entry?",
         jtbd:"When I update account status, I want it reflected everywhere automatically, so I can focus on the customer — not data hygiene.",
         fiveWhys:[
@@ -374,7 +408,7 @@
         ]
       },
       {
-        id:"ps2", themeId:"t2", impact:"High", status:"Validated", stakeholderIds:["s2","s7"],
+        id:"ps2", themeId:"t2", impact:"High", status:"Validated", stakeholderIds:["s2","s7","s19"],
         hmw:"How might we automate high-volume repetitive work so CSMs and TCs spend time on strategy and customer relationships — not copy-paste?",
         jtbd:"When a renewal is due or a version upgrade runs, I want the system to pre-fill the output, so I can review and send instead of building from scratch.",
         fiveWhys:[
@@ -491,6 +525,18 @@
           "Account status (closed/lost) removes these from active AE pipelines even when product-market fit has changed",
           "ARMOR and DSPM are new enough that no re-engagement workflow has been designed",
           "Sales team is focused on new outbound prospecting — historical lead mining is not a defined motion"
+        ]
+      },
+      {
+        id:"ps12", themeId:"t12", impact:"High", status:"Validated", stakeholderIds:["s19"],
+        hmw:"How might we automatically generate the PM's recurring outputs — weekly customer status, Salesforce Chatter updates, and the monthly global dashboard — directly from Smartsheet project data, so PMs spend minutes reviewing instead of hours building?",
+        jtbd:"When I need to send my weekly customer updates and monthly global report, I want the system to pull the current project state from Smartsheet and populate the templates automatically, so I can focus on escalations and customer conversations instead of copy-pasting data into slides and emails.",
+        fiveWhys:[
+          "PMs send 3–4 recurring outputs per week/month, each manually compiled from the same Smartsheet data",
+          "Smartsheet holds all project state (milestones, health, TTV, go-live dates) but has no output-generation capability",
+          "No connector exists between Smartsheet and email, Chatter, or the global dashboard template",
+          "Smartsheet was procured as a project tracking tool, not an automated reporting platform",
+          "PM reporting was designed as a manual stakeholder communication process with no automation mandate"
         ]
       }
     ];
@@ -615,6 +661,30 @@
         successMetrics:["Time to identify right DLP/DSPM contact per account: 30+ min → <5 min","First-outreach-to-response rate on AI-identified contacts vs. manual","% of pipeline sourced from AI-identified contacts over 2 quarters"],
         antiUseCases:["Existing accounts with known contacts already in Salesforce","SMB accounts where one IT person owns everything"],
         notes:"Zach: 'Most of the time is spent finding the person with cybersecurity title but whose responsibility is actually data protection — it's a big difference.' Single-source. Needs ZoomInfo replacement tool context and 2+ AE validation before committing. Confidence capped at 5."
+      },
+      {
+        id:"op11", title:"PM Weekly Status Auto-Generator",
+        description:"Pull live project data from Smartsheet (milestones, completion %, health, open items) and auto-populate the weekly customer status PPT template — delivering a ready-to-review draft to the PM instead of a blank slide deck to rebuild every week. Paresh (US PM) explicitly requested this as his first ask. A Claude + Smartsheet API POC already exists (Deva).",
+        themeIds:["t12","t2"], stakeholderIds:["s19"],
+        reach:6, impact:8, confidence:7, effort:4,
+        horizon:"Now", status:"Approved",
+        statisfyAgent:"Account Weekly Update",
+        tags:["PM","Smartsheet","Automation","Reporting","Weekly Status"],
+        successMetrics:["Weekly status creation time per customer: ~30 min → <5 min review","PM time saved per week: 2–4 hrs across 10–15 customers","Status report delivery consistency: ad hoc → every customer, every week"],
+        antiUseCases:["Highly custom projects with no standard status template","First-time status for a new customer where context hasn't been established in Smartsheet"],
+        notes:"Paresh: 'I have 10–15 customers and I send a status PPT every week — same format, just updated content.' Paresh explicitly asked Tarun to build this. Smartsheet API is open; Deva already built a Claude-based POC. Confidence 7 — single PM source but POC de-risks delivery significantly. Access pending Smartsheet license (~May 25)."
+      },
+      {
+        id:"op12", title:"Global PM Dashboard Automation",
+        description:"Replace the monthly manual collation process (9 PMs emailing data → Paresh aggregating → beautifying → sending to Vishal Ghori and all CSMs) with an automated Power BI dashboard fed directly from the Smartsheet project status sheet. Power BI↔Smartsheet integration already built — just pending Amit's approval to publish.",
+        themeIds:["t12","t1"], stakeholderIds:["s19"],
+        reach:5, impact:7, confidence:7, effort:3,
+        horizon:"Now", status:"Approved",
+        statisfyAgent:"Weekly Priority",
+        tags:["PM","Smartsheet","PowerBI","Dashboard","Reporting"],
+        successMetrics:["Monthly global dashboard creation: 2+ hrs manual collation → automated refresh","Stakeholder visibility: monthly snapshot → real-time Smartsheet data","PM overhead per month: ~2 hrs admin → 0"],
+        antiUseCases:["Dashboard customizations requiring data not available in Smartsheet","Accounts where PM hasn't kept Smartsheet updated"],
+        notes:"Power BI is already connected to Smartsheet project status sheet. Dashboard built and working — pending Amit's approval to publish. Extremely high confidence given the integration exists. Main risk: Amit approval timeline and data discipline across PMs."
       }
     ];
 
