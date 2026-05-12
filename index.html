@@ -58,7 +58,7 @@
             interviews:    mergeById(INIT_INTERVIEWS,    s.interviews),
             themes:        mergeById(INIT_THEMES,        s.themes),
             insights:      mergeById(INIT_INSIGHTS,      s.insights),
-            opportunities: fillInitFields(mergeById(INIT_OPPORTUNITIES, s.opportunities), INIT_OPPORTUNITIES, ["statisfyAgent","businessValue","customerObsession","impactedTeams"]),
+            opportunities: fillInitFields(mergeById(INIT_OPPORTUNITIES, s.opportunities), INIT_OPPORTUNITIES, ["statisfyAgent","businessValue","customerObsession","impactedTeams","impactScore"]),
             results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
             tasks:         s.tasks || [],
             deletedIds:    del,
@@ -547,7 +547,7 @@
         description:"When a TC specifies a product version upgrade, automatically propagate all dependent component version and config fields in ProTrack — eliminating 10+ manual field updates per upgrade cycle.",
         themeIds:["t2"], stakeholderIds:["s7"],
         reach:5, impact:8, confidence:8, effort:3,
-        businessValue:8, customerObsession:6, impactedTeams:["Delivery","Support"],
+        businessValue:8, customerObsession:6, impactScore:7, impactedTeams:["Delivery","Support"],
         effortLabel:"S", horizon:"Now", status:"Approved",
         statisfyAgent:"",
         tags:["ProTrack","Delivery","Automation"],
@@ -560,7 +560,7 @@
         description:"Auto-generate renewal proposals by pulling account data from Salesforce and populating a standardized template — reducing 300+ annual proposals from manual build to review-and-send.",
         themeIds:["t2","t1"], stakeholderIds:["s2"],
         reach:8, impact:8, confidence:6, effort:5,
-        businessValue:9, customerObsession:8, impactedTeams:["Customer Success","Sales"],
+        businessValue:9, customerObsession:8, impactScore:9, impactedTeams:["Customer Success","Sales"],
         effortLabel:"M", horizon:"Next", status:"Under Evaluation",
         statisfyAgent:"Renewal Forecast",
         tags:["Renewal","Salesforce","CSM"],
@@ -573,7 +573,7 @@
         description:"When a support agent is unavailable, auto-triage incoming tickets using KB article matching, draft an intelligent first response with contextual info-gathering prompts, and assign to the right queue.",
         themeIds:["t3","t1"], stakeholderIds:["s7"],
         reach:7, impact:8, confidence:6, effort:5,
-        businessValue:7, customerObsession:9, impactedTeams:["Support","Customer Success"],
+        businessValue:7, customerObsession:9, impactScore:8, impactedTeams:["Support","Customer Success"],
         effortLabel:"M", horizon:"Next", status:"Candidate",
         statisfyAgent:"Account Support Review",
         tags:["FreshDesk","Support","Triage"],
@@ -586,7 +586,7 @@
         description:"Surface external signals — M&A activity, leadership changes, funding events — into CSM workflow as proactive alerts tied to specific accounts.",
         themeIds:["t4"], stakeholderIds:["s2"],
         reach:8, impact:7, confidence:4, effort:6,
-        businessValue:8, customerObsession:8, impactedTeams:["Customer Success","Sales"],
+        businessValue:8, customerObsession:8, impactScore:8, impactedTeams:["Customer Success","Sales"],
         effortLabel:"L", horizon:"Later", status:"Candidate",
         statisfyAgent:"Account News Research, People News Research",
         tags:["Intelligence","CSM","Proactive"],
@@ -599,7 +599,7 @@
         description:"Low-touch accounts access a self-service portal, input configuration details, and receive a fully branded health check report automatically — no CSM involvement required.",
         themeIds:["t5","t2"], stakeholderIds:["s2"],
         reach:6, impact:9, confidence:5, effort:7,
-        businessValue:9, customerObsession:9, impactedTeams:["Customer Success"],
+        businessValue:9, customerObsession:9, impactScore:9, impactedTeams:["Customer Success"],
         effortLabel:"L", horizon:"Later", status:"Candidate",
         statisfyAgent:"Value Delivery, Product Usage",
         tags:["Health Check","Self-Service","Scale"],
@@ -612,7 +612,7 @@
         description:"Auto-generate a pre-call research brief before each customer meeting: company snapshot, key contacts, recent news, DSPM competitor context, and suggested talking points — synthesized from ZoomInfo, Salesforce, and news signals into a single doc delivered before the meeting.",
         themeIds:["t6","t4","t1"], stakeholderIds:["s16","s18"],
         reach:7, impact:7, confidence:7, effort:5,
-        businessValue:8, customerObsession:7, impactedTeams:["Sales"],
+        businessValue:8, customerObsession:7, impactScore:8, impactedTeams:["Sales"],
         effortLabel:"M", horizon:"Next", status:"Candidate",
         statisfyAgent:"Meeting Prep",
         tags:["Sales","Pre-Call","Research","Automation"],
@@ -625,7 +625,7 @@
         description:"A living, role-aware intelligence layer that gives AEs a tested competitive narrative before a deal and gives CSMs an evangelism story before a customer meeting — drawing from product capabilities, winning deal patterns, and successful usecase deliveries. One source, two contexts: pre-sale and post-sale.",
         themeIds:["t7","t1"], stakeholderIds:["s16","s17","s18"],
         reach:8, impact:8, confidence:6, effort:6,
-        businessValue:9, customerObsession:8, impactedTeams:["Sales","Customer Success"],
+        businessValue:9, customerObsession:8, impactScore:9, impactedTeams:["Sales","Customer Success"],
         effortLabel:"M", horizon:"Next", status:"Candidate",
         statisfyAgent:"Competitive Insight, Customer Story",
         tags:["Sales","CSM","Knowledge","Evangelism","Product Coach"],
@@ -638,7 +638,7 @@
         description:"When a CSM is onboarding a new account or planning a QBR, automatically recommend the highest-priority Seclore usecases for that customer — based on their industry, organization size, current adoption stage, and patterns from similar accounts. Outputs a ranked usecase roadmap with an evangelism brief per usecase.",
         themeIds:["t9","t7"], stakeholderIds:["s17"],
         reach:6, impact:8, confidence:5, effort:5,
-        businessValue:8, customerObsession:9, impactedTeams:["Customer Success"],
+        businessValue:8, customerObsession:9, impactScore:9, impactedTeams:["Customer Success"],
         effortLabel:"M", horizon:"Next", status:"Candidate",
         statisfyAgent:"Account Next Best Step, Product Usage",
         tags:["CSM","Usecase","Adoption","Intelligence"],
@@ -651,7 +651,7 @@
         description:"Scan Seclore's existing Salesforce accounts, notes, and closed/lost opportunities for DSPM and DLP keyword signals — automatically surface and score accounts that were cold DRM leads but are now warm ARMOR/DSPM re-engagement candidates.",
         themeIds:["t11","t1"], stakeholderIds:["s18"],
         reach:7, impact:8, confidence:5, effort:5,
-        businessValue:8, customerObsession:5, impactedTeams:["Sales"],
+        businessValue:8, customerObsession:5, impactScore:7, impactedTeams:["Sales"],
         horizon:"Next", status:"Candidate",
         statisfyAgent:"Customer Lookalike, Expansion / Upsell",
         tags:["Salesforce","Sales","ARMOR","DSPM","Pipeline"],
@@ -664,7 +664,7 @@
         description:"Given a target company, automatically identify the person with actual DLP/DSPM responsibility — not just a matching title — by mapping org size, industry, and role patterns to the Seclore buyer persona. Deliver a ranked shortlist of the right contacts to reach, with their LinkedIn profiles and suggested outreach angle.",
         themeIds:["t10","t6"], stakeholderIds:["s18"],
         reach:7, impact:7, confidence:5, effort:6,
-        businessValue:7, customerObsession:7, impactedTeams:["Sales"],
+        businessValue:7, customerObsession:7, impactScore:7, impactedTeams:["Sales"],
         horizon:"Later", status:"Candidate",
         statisfyAgent:"Stakeholder Mapping",
         tags:["Sales","Prospecting","DLP","DSPM","Contact Intelligence"],
@@ -677,7 +677,7 @@
         description:"Pull live project data from Smartsheet (milestones, completion %, health, open items) and auto-populate the weekly customer status PPT template — delivering a ready-to-review draft to the PM instead of a blank slide deck to rebuild every week. Paresh (US PM) explicitly requested this as his first ask. A Claude + Smartsheet API POC already exists (Deva).",
         themeIds:["t12","t2"], stakeholderIds:["s19"],
         reach:6, impact:8, confidence:7, effort:4,
-        businessValue:8, customerObsession:7, impactedTeams:["PM / Delivery","Customer Success"],
+        businessValue:8, customerObsession:7, impactScore:8, impactedTeams:["PM / Delivery","Customer Success"],
         horizon:"Now", status:"Approved",
         statisfyAgent:"Account Weekly Update",
         tags:["PM","Smartsheet","Automation","Reporting","Weekly Status"],
@@ -690,7 +690,7 @@
         description:"Replace the monthly manual collation process (9 PMs emailing data → Paresh aggregating → beautifying → sending to Vishal Ghori and all CSMs) with an automated Power BI dashboard fed directly from the Smartsheet project status sheet. Power BI↔Smartsheet integration already built — just pending Amit's approval to publish.",
         themeIds:["t12","t1"], stakeholderIds:["s19"],
         reach:5, impact:7, confidence:7, effort:3,
-        businessValue:7, customerObsession:6, impactedTeams:["PM / Delivery","Leadership","Customer Success"],
+        businessValue:7, customerObsession:6, impactScore:7, impactedTeams:["PM / Delivery","Leadership","Customer Success"],
         horizon:"Now", status:"Approved",
         statisfyAgent:"Weekly Priority",
         tags:["PM","Smartsheet","PowerBI","Dashboard","Reporting"],
@@ -1288,9 +1288,9 @@
                       <div>
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Scores at Approval</p>
                         <div className="flex gap-4 text-xs text-slate-600 mb-2">
-                          <span>Biz Value <strong>{op.businessValue||"—"}</strong></span>
-                          <span>Cust. Obsession <strong>{op.customerObsession||"—"}</strong></span>
+                          <span>Impact <strong>{op.impactScore||"—"}</strong></span>
                           <span>Effort <strong>{op.effort}</strong></span>
+                          <span>Score <strong className="text-[#3D35C0]">{(op.impactScore||7)*(op.effort||5)}</strong></span>
                         </div>
                         <p className="text-xs text-slate-400">Score: <strong className="text-[#3D35C0] text-sm">{Math.round((op.reach*op.impact*op.confidence)/op.effort)}</strong></p>
                         {op.tags?.length > 0 && (
@@ -1356,11 +1356,10 @@
 
     /* ── Prioritization Matrix section ── */
     function SectionMatrix({ opportunities, stakeholders, themes, updOpp, tasks, addTask, removeTask }) {
-      const [filterHorizon, setFilterHorizon] = useState("All");
       const [openId, setOpenId] = useState(null);
 
-      function impactScore(op) { return Math.round(((op.businessValue||5) + (op.customerObsession||5)) / 2); }
-      function priority(op) { return ((op.businessValue||5) + (op.customerObsession||5)) / (op.effort||5); }
+      function impactScore(op) { return op.impactScore||7; }
+      function score(op) { return (op.impactScore||7) * (op.effort||5); }
 
       const TEAM_OPTIONS = ["Customer Success","Sales","PM / Delivery","Support","Product","Leadership"];
       const TEAM_COLORS  = {
@@ -1372,7 +1371,6 @@
         "Leadership":"bg-slate-100 text-slate-600 border-slate-200",
       };
 
-      const HORIZONS = ["All","Now","Next","Later"];
       const STATUS_COLORS = {
         "Candidate":"bg-slate-100 text-slate-500","Under Evaluation":"bg-amber-100 text-amber-700",
         "Approved":"bg-green-100 text-green-700","Rejected":"bg-red-100 text-red-500",
@@ -1381,46 +1379,29 @@
       const HORIZON_COLORS = { "Now":"bg-green-100 text-green-700","Next":"bg-blue-100 text-blue-700","Later":"bg-slate-100 text-slate-500" };
       const EFFORT_COLORS  = { "S":"bg-green-100 text-green-700","M":"bg-yellow-100 text-yellow-700","L":"bg-orange-100 text-orange-700","XL":"bg-red-100 text-red-700" };
 
-      const filtered = opportunities
-        .filter(op => filterHorizon==="All" || op.horizon===filterHorizon)
-        .sort((a,b) => priority(b)-priority(a));
+      const filtered = [...opportunities].sort((a,b) => score(b)-score(a));
 
       return (
         <div>
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">Opportunity Prioritization
-                <span className="text-sm font-normal text-slate-400 ml-2">{filtered.length} opportunities · Impact × Effort</span>
-              </h2>
-            </div>
-            <div className="flex items-center gap-1">
-              {HORIZONS.map(h => (
-                <button key={h} onClick={() => setFilterHorizon(h)}
-                  className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
-                    filterHorizon===h ? "bg-[#3D35C0] text-white border-[#3D35C0]" : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
-                  }`}>{h}</button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 mb-5 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-            <span className="font-mono font-semibold text-slate-700">Impact = avg(Business Value, Customer Obsession) ÷ Effort</span>
-            <span className="text-slate-300">·</span>
-            <span>All dimensions 1–10 · Higher impact + lower effort = higher priority</span>
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-800">Opportunity Prioritization
+              <span className="text-sm font-normal text-slate-400 ml-2">{filtered.length} opportunities · Impact × Effort</span>
+            </h2>
           </div>
 
           {filtered.length > 0 && (
             <div className="space-y-3">
               {filtered.map((op, idx) => {
                 const iScore = impactScore(op);
+                const opScore = score(op);
                 const isOpen = openId===op.id;
                 const relThemes = themes.filter(t => op.themeIds?.includes(t.id));
                 return (
                   <div key={op.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white hover:border-slate-300 transition-colors">
                     <div className="flex items-start gap-4 p-4 cursor-pointer" onClick={() => setOpenId(isOpen?null:op.id)}>
                       <div className="flex-shrink-0 text-center w-14 pt-1">
-                        <div className="text-2xl font-bold text-[#3D35C0] leading-none">{iScore}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">Impact</div>
+                        <div className="text-2xl font-bold text-[#3D35C0] leading-none">{opScore}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">Score</div>
                         <div className="text-xs text-slate-300 mt-1">#{idx+1}</div>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1429,11 +1410,11 @@
                         </div>
                         <p className="text-xs text-slate-500 leading-relaxed mb-2">{op.description}</p>
                         <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
-                          <span>Biz Value <span className="font-semibold text-slate-600">{op.businessValue||"—"}</span></span>
-                          <span>Customer Obsession <span className="font-semibold text-slate-600">{op.customerObsession||"—"}</span></span>
+                          <span>Impact <span className="font-semibold text-slate-600">{iScore}</span></span>
                           <span className="flex items-center gap-1">Effort <span className="font-semibold text-slate-600">{op.effort}</span>
                             <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${EFFORT_COLORS[effortToLabel(op.effort)]||""}`}>{effortToLabel(op.effort)}</span>
                           </span>
+                          <span className="text-[#3D35C0] font-semibold">Score {opScore}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {relThemes.length>0 && relThemes.map(t => <span key={t.id} className="text-xs bg-purple-50 text-[#3D35C0] px-1.5 py-0.5 rounded">{t.label}</span>)}
@@ -1501,7 +1482,7 @@
                             <div>
                               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Adjust Scores</p>
                               <div className="flex items-center gap-3 flex-wrap">
-                                {[["businessValue","Biz Value"],["customerObsession","Cust. Obsession"],["effort","Effort"]].map(([field,label]) => (
+                                {[["impactScore","Impact (1–10)"],["effort","Effort (1–10)"]].map(([field,label]) => (
                                   <div key={field} className="text-center">
                                     <label className="text-xs text-slate-400 block mb-1">{label}</label>
                                     <input type="number" min="1" max="10" value={op[field]||1}
@@ -1511,8 +1492,8 @@
                                   </div>
                                 ))}
                                 <div className="text-center">
-                                  <label className="text-xs text-slate-400 block mb-1">Impact</label>
-                                  <div className="w-16 text-center py-1.5 text-sm font-bold text-[#3D35C0] bg-purple-50 border border-purple-200 rounded-lg">{iScore}</div>
+                                  <label className="text-xs text-slate-400 block mb-1">Score</label>
+                                  <div className="w-16 text-center py-1.5 text-sm font-bold text-[#3D35C0] bg-purple-50 border border-purple-200 rounded-lg">{opScore}</div>
                                 </div>
                               </div>
                             </div>
@@ -1566,7 +1547,7 @@
       const decisions = results.filter(r => r.type==="decision");
       const outcomes  = results.filter(r => r.type==="outcome");
 
-      function priority(op) { return ((op.businessValue||5) + (op.customerObsession||5)) / (op.effort||5); }
+      function priority(op) { return (op.impactScore||7) * (op.effort||5); }
       const sortedOps = [...(opportunities||[])].sort((a,b) => priority(b)-priority(a));
       const nowOps    = sortedOps.filter(op => op.horizon==="Now");
       const nextOps   = sortedOps.filter(op => op.horizon==="Next");
@@ -1607,7 +1588,7 @@
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-1">
                                 <p className="text-xs font-semibold text-slate-800 leading-snug">{op.title}</p>
-                                <span className="text-xs font-bold text-[#3D35C0] flex-shrink-0">Impact {Math.round(((op.businessValue||5)+(op.customerObsession||5))/2)}</span>
+                                <span className="text-xs font-bold text-[#3D35C0] flex-shrink-0">{(op.impactScore||7)*(op.effort||5)}</span>
                               </div>
                               <div className="flex items-center gap-1.5 mt-1">
                                 <div className={"w-1.5 h-1.5 rounded-full flex-shrink-0 "+(STATUS_DOT[op.status]||"bg-slate-300")} />
@@ -1735,12 +1716,11 @@
 
     /* ── Matrix compact table — used only in PrintView ── */
     function MatrixPrintTable({ opportunities, themes, tasks }) {
-      function impactScore(op) { return Math.round(((op.businessValue||5) + (op.customerObsession||5)) / 2); }
-      function priority(op) { return ((op.businessValue||5) + (op.customerObsession||5)) / (op.effort||5); }
+      function score(op) { return (op.impactScore||7) * (op.effort||5); }
       const HORIZON_COLORS = { "Now":"bg-green-100 text-green-700","Next":"bg-blue-100 text-blue-700","Later":"bg-slate-100 text-slate-500" };
       const EFFORT_COLORS  = { "S":"bg-green-100 text-green-700","M":"bg-yellow-100 text-yellow-700","L":"bg-orange-100 text-orange-700","XL":"bg-red-100 text-red-700" };
       const STATUS_COLORS  = { "Candidate":"bg-slate-100 text-slate-500","Under Evaluation":"bg-amber-100 text-amber-700","Approved":"bg-green-100 text-green-700","In Progress":"bg-blue-100 text-blue-700","Delivered":"bg-indigo-100 text-indigo-700","Rejected":"bg-red-100 text-red-500" };
-      const sorted = [...opportunities].sort((a,b) => priority(b)-priority(a));
+      const sorted = [...opportunities].sort((a,b) => score(b)-score(a));
       return (
         <div>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.7rem"}}>
@@ -1757,7 +1737,7 @@
             </thead>
             <tbody>
               {sorted.map((op, idx) => {
-                const score = impactScore(op);
+                const opScore = score(op);
                 const relThemes = themes.filter(t => op.themeIds?.includes(t.id));
                 const inTasks = tasks.some(t => t.opportunityId===op.id);
                 return (
@@ -1767,7 +1747,7 @@
                       <div style={{fontWeight:600,color:"#1e293b",marginBottom:"1px"}}>{op.title}</div>
                       {op.description && <div style={{color:"#94a3b8",fontSize:"0.65rem",lineHeight:1.3}}>{op.description}</div>}
                     </td>
-                    <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,color:"#3D35C0",fontSize:"0.85rem"}}>{score}</td>
+                    <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,color:"#3D35C0",fontSize:"0.85rem"}}>{opScore}</td>
                     <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={op.horizon} colorClass={HORIZON_COLORS[op.horizon]||"bg-slate-100 text-slate-500"} /></td>
                     <td style={{padding:"5px 8px",textAlign:"center"}}><Badge label={effortToLabel(op.effort)} colorClass={EFFORT_COLORS[effortToLabel(op.effort)]||"bg-slate-100 text-slate-500"} /></td>
                     <td style={{padding:"5px 8px"}}>
@@ -1862,7 +1842,7 @@
             interviews:    mergeById(INIT_INTERVIEWS,    s.interviews),
             themes:        mergeById(INIT_THEMES,        s.themes),
             insights:      mergeById(INIT_INSIGHTS,      s.insights),
-            opportunities: fillInitFields(mergeById(INIT_OPPORTUNITIES, s.opportunities), INIT_OPPORTUNITIES, ["statisfyAgent","businessValue","customerObsession","impactedTeams"]),
+            opportunities: fillInitFields(mergeById(INIT_OPPORTUNITIES, s.opportunities), INIT_OPPORTUNITIES, ["statisfyAgent","businessValue","customerObsession","impactedTeams","impactScore"]),
             results:       mergeById(INIT_RESULTS, s.results).filter(r => !PURGED_RESULT_IDS.has(r.id)),
             tasks:         s.tasks || [],
             deletedIds:    del,
